@@ -1,7 +1,6 @@
 package de.guenthers.certcheck.database
 
 import de.guenthers.certcheck.model.CertCheckResult
-import de.guenthers.certcheck.model.CheckStatus
 import de.guenthers.certcheck.network.SSLChecker
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -14,9 +13,6 @@ class CertCheckRepository(private val database: CertCheckDatabase) {
 
     fun getAllRecentHistory(limit: Int = 50): Flow<List<CheckHistoryEntity>> = 
         historyDao.getAllRecentHistory(limit)
-
-    fun getHistoryForFavorite(favoriteId: Long): Flow<List<CheckHistoryEntity>> =
-        historyDao.getHistoryForFavorite(favoriteId)
 
     suspend fun addFavorite(hostname: String, port: Int = 443): Long {
         val favorite = FavoriteEntity(hostname = hostname, port = port)
@@ -77,10 +73,6 @@ class CertCheckRepository(private val database: CertCheckDatabase) {
                 previousStatus = previous.overallStatus
             )
         } else null
-    }
-
-    suspend fun getAllFavoritesSync(): List<FavoriteEntity> {
-        return favoriteDao.getAllFavorites().first()
     }
 
     private fun CertCheckResult.toHistoryEntity(favoriteId: Long): CheckHistoryEntity {
