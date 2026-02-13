@@ -42,30 +42,44 @@ object SSLChecker {
     /**
      * Lance une vérification complète du certificat SSL d'un hostname.
      */
-    suspend fun check(hostname: String, port: Int = 443): CertCheckResult {
-        val cleanHost = hostname
+    suspend fun check(input: String, defaultPort: Int = 443): CertCheckResult {
+        val cleanInput = input
             .removePrefix("https://")
             .removePrefix("http://")
-            .split("/").first()
-            .split(":").first()
             .trim()
 
-        if (cleanHost.isBlank()) {
+        val (hostname, port) = parseHostnameAndPort(cleanInput, defaultPort)
+
+        if (cleanInput.isBlank()) {
             return CertCheckResult(
-                hostname = cleanHost,
-                port = port,
+                hostname = "",
+                port = defaultPort,
                 error = "Hostname vide"
             )
         }
 
         return try {
-            performCheck(cleanHost, port)
+            performCheck(hostname, port)
         } catch (e: Exception) {
             CertCheckResult(
-                hostname = cleanHost,
+                hostname = hostname,
                 port = port,
                 error = "${e.javaClass.simpleName}: ${e.message}"
             )
+        }
+    }
+
+    private fun parseHostnameAndPort(input: String, defaultPort: Int): Pair<String, Int> {
+        val pathIndex = input.indexOf('/')
+        val hostPart = if (pathIndex > 0) input.substring(0, pathIndex) else input
+        
+        val portIndex = hostPart.lastIndexOf(':')
+        return if (portIndex > 0 && portIndex < hostPart.length - 1) {
+            val host = hostPart.substring(0, portIndex)
+            val port = hostPart.substring(portIndex + 1).toIntOrNull() ?: defaultPort
+            Pair(host, port)
+        } else {
+            Pair(hostPart, defaultPort)
         }
     }
 
