@@ -248,8 +248,7 @@ fun CertCheckApp(viewModel: MainViewModel = viewModel(factory = MainViewModel.Fa
                     favorites = favorites,
                     latestChecks = latestChecks,
                     onFavoriteClick = { favorite ->
-                        viewModel.selectFavoriteHostname(favorite)
-                        selectedTab = 0
+                        viewModel.checkDomain(favorite.hostname, favorite.port)
                     },
                     onFavoriteDelete = viewModel::removeFavorite,
                     onFavoriteRefresh = viewModel::refreshFavorite,
