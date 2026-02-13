@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [FavoriteEntity::class, CheckHistoryEntity::class],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class CertCheckDatabase : RoomDatabase() {
@@ -24,7 +24,7 @@ abstract class CertCheckDatabase : RoomDatabase() {
                     context.applicationContext,
                     CertCheckDatabase::class.java,
                     "certcheck_database"
-                ).build()
+                ).fallbackToDestructiveMigration().build()
                 INSTANCE = instance
                 instance
             }

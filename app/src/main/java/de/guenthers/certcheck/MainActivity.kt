@@ -109,7 +109,7 @@ fun CertCheckApp(viewModel: MainViewModel = viewModel(factory = MainViewModel.Fa
                     onHostnameChanged = viewModel::onHostnameChanged,
                     onCheck = viewModel::checkCertificate,
                     latestChecks = latestChecks,
-                    onHistoryItemClick = viewModel::loadFromHistory,
+                    recentHistory = checkHistory,
                     onDomainCheck = viewModel::checkDomain,
                     modifier = Modifier.padding(padding),
                 )
@@ -120,6 +120,7 @@ fun CertCheckApp(viewModel: MainViewModel = viewModel(factory = MainViewModel.Fa
                 )
                 2 -> FavoritesContent(
                     favorites = favorites,
+                    latestChecks = latestChecks,
                     onFavoriteClick = viewModel::loadFromFavorite,
                     onFavoriteDelete = viewModel::removeFavorite,
                     onFavoriteRefresh = viewModel::refreshFavorite,

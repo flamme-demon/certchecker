@@ -2,10 +2,8 @@ package de.guenthers.certcheck
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.viewmodel.CreationExtras
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import de.guenthers.certcheck.database.CertCheckDatabase
@@ -27,7 +25,6 @@ data class MainUiState(
     val hostname: String = "",
     val isLoading: Boolean = false,
     val result: CertCheckResult? = null,
-    val history: List<CertCheckResult> = emptyList(),
     val isFavorite: Boolean = false,
 )
 
@@ -78,8 +75,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _uiState.value = _uiState.value.copy(
                 isLoading = false,
                 result = result,
-                history = listOf(result) + _uiState.value.history.take(19),
             )
+            repository.saveCheck(result)
             checkIfFavorite()
         }
     }
@@ -122,14 +119,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearResult() {
         _uiState.value = _uiState.value.copy(result = null)
-    }
-
-    fun loadFromHistory(result: CertCheckResult) {
-        _uiState.value = _uiState.value.copy(
-            hostname = result.hostname,
-            result = result,
-        )
-        checkIfFavorite()
     }
 
     fun checkDomain(hostname: String, port: Int = 443) {

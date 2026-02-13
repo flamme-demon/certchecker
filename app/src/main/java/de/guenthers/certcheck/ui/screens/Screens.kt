@@ -1,9 +1,11 @@
 package de.guenthers.certcheck.ui.screens
 
 import androidx.compose.animation.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -13,11 +15,16 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import de.guenthers.certcheck.MainUiState
 import de.guenthers.certcheck.database.CheckHistoryEntity
 import de.guenthers.certcheck.database.FavoriteEntity
@@ -38,7 +45,7 @@ fun DashboardContent(
     onHostnameChanged: (String) -> Unit,
     onCheck: () -> Unit,
     latestChecks: List<CheckHistoryEntity>,
-    onHistoryItemClick: (CertCheckResult) -> Unit,
+    recentHistory: List<CheckHistoryEntity>,
     onDomainCheck: (String, Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -154,8 +161,8 @@ fun DashboardContent(
             }
         }
 
-        // Recent session checks
-        if (uiState.history.isNotEmpty()) {
+        // Recent checks from database
+        if (recentHistory.isNotEmpty()) {
             item {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
@@ -165,8 +172,11 @@ fun DashboardContent(
                 )
             }
 
-            items(uiState.history) { result ->
-                RecentCheckItem(result = result, onClick = { onHistoryItemClick(result) })
+            items(recentHistory.take(10)) { check ->
+                HistoryEntityItem(
+                    check = check,
+                    onClick = { onDomainCheck(check.hostname, check.port) }
+                )
             }
         }
 
@@ -294,123 +304,12 @@ private fun StatItem(value: Int, label: String, color: androidx.compose.ui.graph
     }
 }
 
-@Composable
-private fun RecentCheckItem(result: CertCheckResult, onClick: () -> Unit) {
-    val dateFormat = remember { SimpleDateFormat("dd/MM HH:mm", Locale.getDefault()) }
-    val statusColor = when (result.overallStatus) {
-        CheckStatus.OK -> GreenOk
-        CheckStatus.WARNING -> OrangeWarning
-        CheckStatus.CRITICAL -> RedCritical
-        CheckStatus.ERROR -> RedCritical
-    }
-    val leafCert = result.certificates.firstOrNull()
-    val validityText = when {
-        leafCert == null -> ""
-        leafCert.isExpired -> "Expiré"
-        leafCert.daysUntilExpiry <= 30 -> "Expire dans ${leafCert.daysUntilExpiry}j"
-        else -> {
-            val df = remember { SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()) }
-            "Valide jusqu'au ${df.format(leafCert.notAfter)}"
-        }
-    }
-
-    OutlinedCard(
-        modifier = Modifier.fillMaxWidth(),
-        onClick = onClick,
-        shape = MaterialTheme.shapes.medium,
-    ) {
-        Row(
-            modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Icon(
-                imageVector = when (result.overallStatus) {
-                    CheckStatus.OK -> Icons.Filled.CheckCircle
-                    CheckStatus.WARNING -> Icons.Filled.Warning
-                    else -> Icons.Filled.Error
-                },
-                contentDescription = null,
-                tint = statusColor,
-                modifier = Modifier.size(24.dp)
-            )
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = result.hostname,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Medium
-                )
-                if (validityText.isNotEmpty()) {
-                    Text(
-                        text = validityText,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            Text(
-                text = dateFormat.format(result.timestamp),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
 // ============================================================================
-// History Tab
+// Shared history item composable
 // ============================================================================
 
 @Composable
-fun HistoryContent(
-    history: List<CheckHistoryEntity>,
-    onDomainCheck: (String, Int) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    if (history.isEmpty()) {
-        Box(
-            modifier = modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(
-                    Icons.Filled.History,
-                    contentDescription = null,
-                    modifier = Modifier.size(64.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = "Aucun historique",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    text = "Les vérifications de vos favoris apparaîtront ici",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                )
-            }
-        }
-    } else {
-        LazyColumn(
-            modifier = modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(history) { check ->
-                HistoryEntityItem(
-                    check = check,
-                    onClick = { onDomainCheck(check.hostname, check.port) }
-                )
-            }
-            item { Spacer(modifier = Modifier.height(8.dp)) }
-        }
-    }
-}
-
-@Composable
-private fun HistoryEntityItem(check: CheckHistoryEntity, onClick: () -> Unit) {
+fun HistoryEntityItem(check: CheckHistoryEntity, onClick: () -> Unit) {
     val dateFormat = remember { SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()) }
     val statusColor = when (check.overallStatus) {
         "OK" -> GreenOk
@@ -470,17 +369,74 @@ private fun HistoryEntityItem(check: CheckHistoryEntity, onClick: () -> Unit) {
 }
 
 // ============================================================================
+// History Tab
+// ============================================================================
+
+@Composable
+fun HistoryContent(
+    history: List<CheckHistoryEntity>,
+    onDomainCheck: (String, Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (history.isEmpty()) {
+        Box(
+            modifier = modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(
+                    Icons.Filled.History,
+                    contentDescription = null,
+                    modifier = Modifier.size(64.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "Aucun historique",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = "Vos vérifications apparaîtront ici",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                )
+            }
+        }
+    } else {
+        LazyColumn(
+            modifier = modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(history) { check ->
+                HistoryEntityItem(
+                    check = check,
+                    onClick = { onDomainCheck(check.hostname, check.port) }
+                )
+            }
+            item { Spacer(modifier = Modifier.height(8.dp)) }
+        }
+    }
+}
+
+// ============================================================================
 // Favorites Tab
 // ============================================================================
 
 @Composable
 fun FavoritesContent(
     favorites: List<FavoriteEntity>,
+    latestChecks: List<CheckHistoryEntity>,
     onFavoriteClick: (FavoriteEntity) -> Unit,
     onFavoriteDelete: (Long) -> Unit,
     onFavoriteRefresh: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val checksByFavoriteId = remember(latestChecks) {
+        latestChecks.associateBy { it.favoriteId }
+    }
+
     if (favorites.isEmpty()) {
         Box(
             modifier = modifier.fillMaxSize(),
@@ -515,6 +471,7 @@ fun FavoritesContent(
             items(favorites) { favorite ->
                 FavoriteItem(
                     favorite = favorite,
+                    lastCheck = checksByFavoriteId[favorite.id],
                     onClick = { onFavoriteClick(favorite) },
                     onDelete = { onFavoriteDelete(favorite.id) },
                     onRefresh = { onFavoriteRefresh(favorite.id) }
@@ -528,6 +485,7 @@ fun FavoritesContent(
 @Composable
 private fun FavoriteItem(
     favorite: FavoriteEntity,
+    lastCheck: CheckHistoryEntity?,
     onClick: () -> Unit,
     onDelete: () -> Unit,
     onRefresh: () -> Unit,
@@ -537,6 +495,38 @@ private fun FavoriteItem(
     } else {
         "${favorite.hostname}:${favorite.port}"
     }
+
+    val statusColor = when (lastCheck?.overallStatus) {
+        "OK" -> GreenOk
+        "WARNING" -> OrangeWarning
+        "CRITICAL", "ERROR" -> RedCritical
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    val statusIcon = when (lastCheck?.overallStatus) {
+        "OK" -> Icons.Filled.CheckCircle
+        "WARNING" -> Icons.Filled.Warning
+        "CRITICAL", "ERROR" -> Icons.Filled.Error
+        else -> Icons.Filled.HelpOutline
+    }
+
+    val expiryText = when {
+        lastCheck == null -> null
+        lastCheck.daysUntilExpiry == null -> null
+        lastCheck.daysUntilExpiry!! <= 0 -> "Expiré"
+        lastCheck.daysUntilExpiry!! == 1L -> "Expire dans 1 jour"
+        lastCheck.daysUntilExpiry!! <= 30 -> "Expire dans ${lastCheck.daysUntilExpiry}j"
+        else -> "Valide (${lastCheck.daysUntilExpiry}j)"
+    }
+
+    val expiryColor = when {
+        lastCheck?.daysUntilExpiry == null -> MaterialTheme.colorScheme.onSurfaceVariant
+        lastCheck.daysUntilExpiry!! <= 7 -> RedCritical
+        lastCheck.daysUntilExpiry!! <= 30 -> OrangeWarning
+        else -> GreenOk
+    }
+
+    val dateFormat = remember { SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()) }
 
     OutlinedCard(
         modifier = Modifier.fillMaxWidth(),
@@ -548,26 +538,73 @@ private fun FavoriteItem(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Icon(
-                imageVector = Icons.Filled.Star,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(24.dp)
-            )
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = hostWithPort,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Medium
+            // Favicon
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data("https://www.google.com/s2/favicons?domain=${favorite.hostname}&sz=64")
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(CircleShape),
+                    contentScale = ContentScale.Fit,
                 )
-                favorite.lastCheckedAt?.let { timestamp ->
+            }
+
+            // Info
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
                     Text(
-                        text = "Dernière vérification: ${SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date(timestamp))}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = hostWithPort,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Icon(
+                        imageVector = statusIcon,
+                        contentDescription = null,
+                        tint = statusColor,
+                        modifier = Modifier.size(16.dp)
                     )
                 }
+
+                if (expiryText != null) {
+                    Text(
+                        text = expiryText,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Medium,
+                        color = expiryColor,
+                    )
+                }
+
+                favorite.lastCheckedAt?.let { timestamp ->
+                    Text(
+                        text = "Testé le ${dateFormat.format(Date(timestamp))}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } ?: run {
+                    if (lastCheck == null) {
+                        Text(
+                            text = "Jamais vérifié",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        )
+                    }
+                }
             }
+
+            // Actions
             IconButton(onClick = onRefresh) {
                 Icon(Icons.Filled.Refresh, contentDescription = "Vérifier")
             }

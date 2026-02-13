@@ -17,6 +17,11 @@ class CertCheckRepository(private val database: CertCheckDatabase) {
     fun getLatestCheckPerFavorite(): Flow<List<CheckHistoryEntity>> =
         historyDao.getLatestCheckPerFavorite()
 
+    suspend fun saveCheck(result: CertCheckResult, favoriteId: Long? = null) {
+        val entity = result.toHistoryEntity(favoriteId)
+        historyDao.insertHistory(entity)
+    }
+
     suspend fun addFavorite(hostname: String, port: Int = 443): Long {
         val favorite = FavoriteEntity(hostname = hostname, port = port)
         return favoriteDao.insertFavorite(favorite)
@@ -78,7 +83,7 @@ class CertCheckRepository(private val database: CertCheckDatabase) {
         } else null
     }
 
-    private fun CertCheckResult.toHistoryEntity(favoriteId: Long): CheckHistoryEntity {
+    private fun CertCheckResult.toHistoryEntity(favoriteId: Long?): CheckHistoryEntity {
         val leafCert = certificates.firstOrNull()
         return CheckHistoryEntity(
             favoriteId = favoriteId,
