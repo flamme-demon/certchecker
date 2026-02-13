@@ -127,14 +127,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         checkCertificate()
     }
 
-    fun loadFromFavorite(favorite: FavoriteEntity) {
+    fun selectFavoriteHostname(favorite: FavoriteEntity) {
         val hostWithPort = if (favorite.port == 443) {
             favorite.hostname
         } else {
             "${favorite.hostname}:${favorite.port}"
         }
         _uiState.value = _uiState.value.copy(hostname = hostWithPort)
-        checkCertificate()
+        checkIfFavorite()
     }
 
     private fun parseHostnameAndPort(input: String): Pair<String, Int> {

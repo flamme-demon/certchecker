@@ -24,7 +24,15 @@ class CertCheckRepository(private val database: CertCheckDatabase) {
 
     suspend fun addFavorite(hostname: String, port: Int = 443): Long {
         val favorite = FavoriteEntity(hostname = hostname, port = port)
-        return favoriteDao.insertFavorite(favorite)
+        val favId = favoriteDao.insertFavorite(favorite)
+        // Link existing checks to this new favorite
+        historyDao.linkChecksToFavorite(favId, hostname, port)
+        // Update lastCheckedAt from the most recent linked check
+        val recentChecks = historyDao.getRecentHistory(favId, 1)
+        if (recentChecks.isNotEmpty()) {
+            favoriteDao.updateLastChecked(favId, recentChecks.first().checkedAt)
+        }
+        return favId
     }
 
     suspend fun removeFavorite(id: Long) {

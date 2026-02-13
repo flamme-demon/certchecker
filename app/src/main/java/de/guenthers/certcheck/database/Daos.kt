@@ -57,4 +57,7 @@ interface CheckHistoryDao {
         ORDER BY ch.daysUntilExpiry ASC
     """)
     fun getLatestCheckPerFavorite(): Flow<List<CheckHistoryEntity>>
+
+    @Query("UPDATE check_history SET favoriteId = :favoriteId WHERE hostname = :hostname AND port = :port AND favoriteId IS NULL")
+    suspend fun linkChecksToFavorite(favoriteId: Long, hostname: String, port: Int)
 }

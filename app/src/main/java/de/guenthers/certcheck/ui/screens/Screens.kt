@@ -1,6 +1,5 @@
 package de.guenthers.certcheck.ui.screens
 
-import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -9,7 +8,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -335,8 +333,29 @@ fun HistoryEntityItem(check: CheckHistoryEntity, onClick: () -> Unit) {
         Row(
             modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            // Favicon
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data("https://www.google.com/s2/favicons?domain=${check.hostname}&sz=64")
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(22.dp)
+                        .clip(CircleShape),
+                    contentScale = ContentScale.Fit,
+                )
+            }
+            // Status icon
             Icon(
                 imageVector = when (check.overallStatus) {
                     "OK" -> Icons.Filled.CheckCircle
@@ -345,7 +364,7 @@ fun HistoryEntityItem(check: CheckHistoryEntity, onClick: () -> Unit) {
                 },
                 contentDescription = null,
                 tint = statusColor,
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(18.dp)
             )
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -620,114 +639,80 @@ private fun FavoriteItem(
 }
 
 // ============================================================================
-// Result Screen - Détails complets du résultat
+// Result Content - Détails complets du résultat (sans Scaffold propre)
 // ============================================================================
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ResultScreen(
+fun ResultContent(
     result: CertCheckResult,
-    onBack: () -> Unit,
-    onRecheck: () -> Unit,
-    isFavorite: Boolean,
-    onToggleFavorite: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(result.hostname) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour")
-                    }
-                },
-                actions = {
-                    IconButton(onClick = onToggleFavorite) {
-                        Icon(
-                            imageVector = if (isFavorite) Icons.Filled.Star else Icons.Filled.StarBorder,
-                            contentDescription = if (isFavorite) "Retirer des favoris" else "Ajouter aux favoris",
-                            tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                    IconButton(onClick = onRecheck) {
-                        Icon(Icons.Filled.Refresh, contentDescription = "Revérifier")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
-            )
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        // Status global
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center
+            ) {
+                StatusBadge(status = result.overallStatus)
+            }
         }
-    ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            // Status global
+
+        // Erreur globale
+        if (result.error != null) {
             item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    StatusBadge(status = result.overallStatus)
-                }
-            }
-
-            // Erreur globale
-            if (result.error != null) {
-                item {
-                    IssueCard(
-                        CertIssue(
-                            type = IssueType.ANDROID_SPECIFIC_TRUST_ISSUE,
-                            severity = IssueSeverity.CRITICAL,
-                            title = "Erreur de connexion",
-                            description = result.error
-                        )
+                IssueCard(
+                    CertIssue(
+                        type = IssueType.ANDROID_SPECIFIC_TRUST_ISSUE,
+                        severity = IssueSeverity.CRITICAL,
+                        title = "Erreur de connexion",
+                        description = result.error
                     )
-                }
+                )
             }
-
-            // Infos de connexion
-            if (result.tlsVersion != null) {
-                item {
-                    ConnectionInfoCard(result = result)
-                }
-            }
-
-            // Problèmes détectés
-            if (result.issues.isNotEmpty()) {
-                item {
-                    Text(
-                        text = "Problèmes détectés (${result.issues.size})",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
-                items(result.issues) { issue ->
-                    IssueCard(issue = issue)
-                }
-            }
-
-            // Chaîne de certificats
-            if (result.certificates.isNotEmpty()) {
-                item {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Chaîne de certificats (${result.certificates.size})",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
-                items(result.certificates) { cert ->
-                    CertificateCard(certInfo = cert)
-                }
-            }
-
-            // Spacer en bas
-            item { Spacer(modifier = Modifier.height(16.dp)) }
         }
+
+        // Infos de connexion
+        if (result.tlsVersion != null) {
+            item {
+                ConnectionInfoCard(result = result)
+            }
+        }
+
+        // Problèmes détectés
+        if (result.issues.isNotEmpty()) {
+            item {
+                Text(
+                    text = "Problèmes détectés (${result.issues.size})",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+            items(result.issues) { issue ->
+                IssueCard(issue = issue)
+            }
+        }
+
+        // Chaîne de certificats
+        if (result.certificates.isNotEmpty()) {
+            item {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Chaîne de certificats (${result.certificates.size})",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+            items(result.certificates) { cert ->
+                CertificateCard(certInfo = cert)
+            }
+        }
+
+        // Spacer en bas
+        item { Spacer(modifier = Modifier.height(16.dp)) }
     }
 }
