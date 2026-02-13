@@ -162,7 +162,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     companion object {
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {
-                MainViewModel(Application())
+                val application = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY]
+                    as Application
+                MainViewModel(application)
             }
         }
     }

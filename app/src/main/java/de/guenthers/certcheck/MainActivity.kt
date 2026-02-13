@@ -27,6 +27,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun CertCheckApp(viewModel: MainViewModel = viewModel(factory = MainViewModel.Factory)) {
     val uiState by viewModel.uiState.collectAsState()
+    val favorites by viewModel.favorites.collectAsState()
 
     if (uiState.result != null && !uiState.isLoading) {
         ResultScreen(
@@ -42,7 +43,7 @@ fun CertCheckApp(viewModel: MainViewModel = viewModel(factory = MainViewModel.Fa
             onHostnameChanged = viewModel::onHostnameChanged,
             onCheck = viewModel::checkCertificate,
             onHistoryItemClick = viewModel::loadFromHistory,
-            favorites = viewModel.favorites.value,
+            favorites = favorites,
             onFavoriteClick = viewModel::loadFromFavorite,
             onFavoriteDelete = viewModel::removeFavorite,
             onFavoriteRefresh = viewModel::refreshFavorite,
