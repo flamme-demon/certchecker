@@ -39,6 +39,11 @@ class CertCheckRepository(private val database: CertCheckDatabase) {
         favoriteDao.deleteFavoriteById(id)
     }
 
+    suspend fun toggleFavoriteNotifications(id: Long) {
+        val favorite = favoriteDao.getFavoriteById(id) ?: return
+        favoriteDao.updateNotificationsEnabled(id, !favorite.notificationsEnabled)
+    }
+
     suspend fun isFavorite(hostname: String, port: Int): Boolean {
         return favoriteDao.getFavoriteByHostAndPort(hostname, port) != null
     }

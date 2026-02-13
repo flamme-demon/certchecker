@@ -25,6 +25,9 @@ interface FavoriteDao {
 
     @Query("UPDATE favorites SET lastCheckedAt = :timestamp WHERE id = :id")
     suspend fun updateLastChecked(id: Long, timestamp: Long)
+
+    @Query("UPDATE favorites SET notificationsEnabled = :enabled WHERE id = :id")
+    suspend fun updateNotificationsEnabled(id: Long, enabled: Boolean)
 }
 
 @Dao

@@ -45,7 +45,8 @@ class DailyCertificateCheckWorker(
                 val history = repository.checkAndSaveResult(favorite.id)
                 val changes = repository.checkChanges(favorite.id)
 
-                if (!notificationsEnabled) continue
+                // Skip notifications if globally disabled or disabled for this favorite
+                if (!notificationsEnabled || !favorite.notificationsEnabled) continue
 
                 when {
                     history.daysUntilExpiry != null && history.daysUntilExpiry <= alertThreshold -> {
@@ -79,7 +80,7 @@ class DailyCertificateCheckWorker(
                     }
                 }
             } catch (e: Exception) {
-                if (notificationsEnabled) {
+                if (notificationsEnabled && favorite.notificationsEnabled) {
                     showNotification(
                         notificationManager,
                         ERROR_ALERT_CHANNEL_ID,

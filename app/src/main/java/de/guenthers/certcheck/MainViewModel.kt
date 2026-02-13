@@ -143,6 +143,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun toggleFavoriteNotifications(favoriteId: Long) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.toggleFavoriteNotifications(favoriteId)
+        }
+    }
+
     fun refreshFavorite(favoriteId: Long) {
         viewModelScope.launch(Dispatchers.IO) {
             repository.checkAndSaveResult(favoriteId)

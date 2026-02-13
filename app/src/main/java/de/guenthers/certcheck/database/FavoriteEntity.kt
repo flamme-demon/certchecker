@@ -1,5 +1,6 @@
 package de.guenthers.certcheck.database
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
@@ -11,4 +12,6 @@ data class FavoriteEntity(
     val port: Int = 443,
     val addedAt: Long = System.currentTimeMillis(),
     val lastCheckedAt: Long? = null,
+    @ColumnInfo(defaultValue = "1")
+    val notificationsEnabled: Boolean = true,
 )

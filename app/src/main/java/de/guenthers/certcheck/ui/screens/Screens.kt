@@ -479,6 +479,7 @@ fun FavoritesContent(
     onFavoriteClick: (FavoriteEntity) -> Unit,
     onFavoriteDelete: (Long) -> Unit,
     onFavoriteRefresh: (Long) -> Unit,
+    onFavoriteToggleNotifications: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val checksByFavoriteId = remember(latestChecks) {
@@ -522,7 +523,8 @@ fun FavoritesContent(
                     lastCheck = checksByFavoriteId[favorite.id],
                     onClick = { onFavoriteClick(favorite) },
                     onDelete = { onFavoriteDelete(favorite.id) },
-                    onRefresh = { onFavoriteRefresh(favorite.id) }
+                    onRefresh = { onFavoriteRefresh(favorite.id) },
+                    onToggleNotifications = { onFavoriteToggleNotifications(favorite.id) },
                 )
             }
             item { Spacer(modifier = Modifier.height(8.dp)) }
@@ -537,6 +539,7 @@ private fun FavoriteItem(
     onClick: () -> Unit,
     onDelete: () -> Unit,
     onRefresh: () -> Unit,
+    onToggleNotifications: () -> Unit,
 ) {
     val hostWithPort = if (favorite.port == 443) {
         favorite.hostname
@@ -653,6 +656,17 @@ private fun FavoriteItem(
             }
 
             // Actions
+            IconButton(onClick = onToggleNotifications) {
+                Icon(
+                    imageVector = if (favorite.notificationsEnabled) Icons.Filled.Notifications
+                        else Icons.Filled.NotificationsOff,
+                    contentDescription = if (favorite.notificationsEnabled) "Désactiver les notifications"
+                        else "Activer les notifications",
+                    tint = if (favorite.notificationsEnabled) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                    modifier = Modifier.size(20.dp),
+                )
+            }
             IconButton(onClick = onRefresh) {
                 Icon(Icons.Filled.Refresh, contentDescription = "Vérifier")
             }
