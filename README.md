@@ -42,8 +42,8 @@ Android utilise son propre **trust store système** qui diffère de celui des na
 ## Build
 
 ```bash
-git clone https://github.com/votre-user/certcheck.git
-cd certcheck
+git clone https://github.com/flamme-demon/certchecker.git
+cd certchecker
 ./gradlew assembleDebug
 ```
 
