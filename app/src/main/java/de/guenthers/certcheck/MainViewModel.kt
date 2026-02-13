@@ -45,6 +45,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val checkHistory: StateFlow<List<CheckHistoryEntity>> = repository.getAllRecentHistory(50)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val latestChecks: StateFlow<List<CheckHistoryEntity>> = repository.getLatestCheckPerFavorite()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     init {
         DailyCertificateCheckWorker.schedule(application)
     }
@@ -127,6 +130,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             result = result,
         )
         checkIfFavorite()
+    }
+
+    fun checkDomain(hostname: String, port: Int = 443) {
+        val hostWithPort = if (port == 443) hostname else "$hostname:$port"
+        _uiState.value = _uiState.value.copy(hostname = hostWithPort)
+        checkCertificate()
     }
 
     fun loadFromFavorite(favorite: FavoriteEntity) {

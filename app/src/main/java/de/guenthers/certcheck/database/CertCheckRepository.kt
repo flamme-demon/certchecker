@@ -11,8 +11,11 @@ class CertCheckRepository(private val database: CertCheckDatabase) {
 
     fun getAllFavorites(): Flow<List<FavoriteEntity>> = favoriteDao.getAllFavorites()
 
-    fun getAllRecentHistory(limit: Int = 50): Flow<List<CheckHistoryEntity>> = 
+    fun getAllRecentHistory(limit: Int = 50): Flow<List<CheckHistoryEntity>> =
         historyDao.getAllRecentHistory(limit)
+
+    fun getLatestCheckPerFavorite(): Flow<List<CheckHistoryEntity>> =
+        historyDao.getLatestCheckPerFavorite()
 
     suspend fun addFavorite(hostname: String, port: Int = 443): Long {
         val favorite = FavoriteEntity(hostname = hostname, port = port)
