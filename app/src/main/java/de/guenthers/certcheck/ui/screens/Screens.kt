@@ -195,6 +195,22 @@ fun HomeScreen(
         }
     }
 }
+
+@Composable
+private fun HistoryItem(result: CertCheckResult, onClick: () -> Unit) {
+    val dateFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
+    val statusColor = when (result.overallStatus) {
+        CheckStatus.OK -> GreenOk
+        CheckStatus.WARNING -> OrangeWarning
+        CheckStatus.CRITICAL -> RedCritical
+        CheckStatus.ERROR -> RedCritical
+    }
+
+    OutlinedCard(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = onClick,
+        shape = MaterialTheme.shapes.medium,
+    ) {
         Row(
             modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
