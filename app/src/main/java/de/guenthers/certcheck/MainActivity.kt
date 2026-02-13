@@ -1,5 +1,6 @@
 package de.guenthers.certcheck
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -14,20 +15,26 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import de.guenthers.certcheck.model.CertCheckResult
+import de.guenthers.certcheck.model.CheckStatus
 import de.guenthers.certcheck.ui.screens.DashboardContent
 import de.guenthers.certcheck.ui.screens.FavoritesContent
 import de.guenthers.certcheck.ui.screens.HistoryContent
 import de.guenthers.certcheck.ui.screens.ResultContent
 import de.guenthers.certcheck.ui.screens.SettingsContent
 import de.guenthers.certcheck.ui.theme.CertCheckTheme
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 class MainActivity : ComponentActivity() {
 
@@ -107,6 +114,7 @@ fun CertCheckApp(viewModel: MainViewModel = viewModel(factory = MainViewModel.Fa
                 },
                 actions = {
                     if (showResult) {
+                        val context = LocalContext.current
                         IconButton(onClick = viewModel::toggleFavorite) {
                             Icon(
                                 imageVector = if (uiState.isFavorite) Icons.Filled.Star
@@ -116,6 +124,22 @@ fun CertCheckApp(viewModel: MainViewModel = viewModel(factory = MainViewModel.Fa
                                 tint = if (uiState.isFavorite) MaterialTheme.colorScheme.primary
                                     else MaterialTheme.colorScheme.onSurface
                             )
+                        }
+                        IconButton(onClick = {
+                            uiState.result?.let { result ->
+                                val report = generateReport(result)
+                                val sendIntent = Intent().apply {
+                                    action = Intent.ACTION_SEND
+                                    putExtra(Intent.EXTRA_TEXT, report)
+                                    putExtra(Intent.EXTRA_SUBJECT, "CertCheck — ${result.hostname}")
+                                    type = "text/plain"
+                                }
+                                context.startActivity(
+                                    Intent.createChooser(sendIntent, "Partager le rapport")
+                                )
+                            }
+                        }) {
+                            Icon(Icons.Filled.Share, contentDescription = "Partager")
                         }
                         IconButton(onClick = { viewModel.checkCertificate() }) {
                             Icon(Icons.Filled.Refresh, contentDescription = "Revérifier")
@@ -215,4 +239,66 @@ fun CertCheckApp(viewModel: MainViewModel = viewModel(factory = MainViewModel.Fa
             }
         }
     }
+}
+
+private fun generateReport(result: CertCheckResult): String {
+    val dateFormat = SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault())
+    val sb = StringBuilder()
+
+    sb.appendLine("=== CertCheck — Rapport SSL/TLS ===")
+    sb.appendLine()
+    sb.appendLine("Domaine : ${result.hostname}:${result.port}")
+    sb.appendLine("Date    : ${dateFormat.format(result.timestamp)}")
+    sb.appendLine("Status  : ${result.overallStatus}")
+    sb.appendLine()
+
+    if (result.error != null) {
+        sb.appendLine("ERREUR : ${result.error}")
+        sb.appendLine()
+    }
+
+    if (result.tlsVersion != null) {
+        sb.appendLine("--- Connexion ---")
+        sb.appendLine("TLS          : ${result.tlsVersion}")
+        sb.appendLine("Cipher Suite : ${result.cipherSuite ?: "N/A"}")
+        sb.appendLine("Confiance Android : ${if (result.trustedByAndroid) "Oui" else "Non"}")
+        sb.appendLine("Hostname match    : ${if (result.hostnameMatches) "Oui" else "Non"}")
+        sb.appendLine("Chaîne valide     : ${if (result.chainValid) "Oui" else "Non"}")
+        sb.appendLine()
+    }
+
+    if (result.issues.isNotEmpty()) {
+        sb.appendLine("--- Problèmes détectés (${result.issues.size}) ---")
+        result.issues.forEach { issue ->
+            val severity = when (issue.severity) {
+                de.guenthers.certcheck.model.IssueSeverity.CRITICAL -> "CRITIQUE"
+                de.guenthers.certcheck.model.IssueSeverity.WARNING -> "ATTENTION"
+                de.guenthers.certcheck.model.IssueSeverity.INFO -> "INFO"
+            }
+            sb.appendLine("[$severity] ${issue.title}")
+            sb.appendLine("  ${issue.description}")
+            sb.appendLine()
+        }
+    }
+
+    if (result.certificates.isNotEmpty()) {
+        sb.appendLine("--- Certificats (${result.certificates.size}) ---")
+        result.certificates.forEach { cert ->
+            sb.appendLine("[${cert.label}]")
+            sb.appendLine("  Sujet     : ${cert.subject}")
+            sb.appendLine("  Émetteur  : ${cert.issuer}")
+            sb.appendLine("  Valide du : ${dateFormat.format(cert.notBefore)}")
+            sb.appendLine("  Expire le : ${dateFormat.format(cert.notAfter)} (${cert.daysUntilExpiry}j)")
+            sb.appendLine("  Algo      : ${cert.signatureAlgorithm}")
+            sb.appendLine("  Clé       : ${cert.publicKeyAlgorithm} ${cert.publicKeySize} bits")
+            sb.appendLine("  SHA-256   : ${cert.fingerprints.sha256}")
+            if (cert.subjectAlternativeNames.isNotEmpty()) {
+                sb.appendLine("  SANs      : ${cert.subjectAlternativeNames.joinToString(", ")}")
+            }
+            sb.appendLine()
+        }
+    }
+
+    sb.appendLine("--- Généré par CertCheck ---")
+    return sb.toString()
 }

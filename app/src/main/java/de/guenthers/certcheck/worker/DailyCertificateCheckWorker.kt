@@ -13,6 +13,7 @@ import de.guenthers.certcheck.R
 import de.guenthers.certcheck.UserPreferences
 import de.guenthers.certcheck.database.CertCheckDatabase
 import de.guenthers.certcheck.database.CertCheckRepository
+import de.guenthers.certcheck.widget.CertCheckWidgetProvider
 import kotlinx.coroutines.flow.first
 import java.util.Calendar
 import java.util.concurrent.TimeUnit
@@ -89,6 +90,9 @@ class DailyCertificateCheckWorker(
                 }
             }
         }
+
+        // Update widget with latest data
+        CertCheckWidgetProvider.updateAll(context)
 
         return Result.success()
     }

@@ -12,12 +12,14 @@ import de.guenthers.certcheck.database.CheckHistoryEntity
 import de.guenthers.certcheck.database.FavoriteEntity
 import de.guenthers.certcheck.model.CertCheckResult
 import de.guenthers.certcheck.network.SSLChecker
+import de.guenthers.certcheck.widget.CertCheckWidgetProvider
 import de.guenthers.certcheck.worker.DailyCertificateCheckWorker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -26,6 +28,9 @@ data class MainUiState(
     val isLoading: Boolean = false,
     val result: CertCheckResult? = null,
     val isFavorite: Boolean = false,
+    val isRefreshingFavorites: Boolean = false,
+    val refreshProgress: Int = 0,
+    val refreshTotal: Int = 0,
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -48,6 +53,32 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         DailyCertificateCheckWorker.schedule(application, preferences.checkHour.value)
+        refreshAllFavorites()
+    }
+
+    fun refreshAllFavorites() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val favs = repository.getAllFavorites().first()
+            if (favs.isEmpty()) return@launch
+
+            _uiState.value = _uiState.value.copy(
+                isRefreshingFavorites = true,
+                refreshProgress = 0,
+                refreshTotal = favs.size,
+            )
+
+            favs.forEachIndexed { index, favorite ->
+                try {
+                    repository.checkAndSaveResult(favorite.id)
+                } catch (_: Exception) {
+                    // Silently ignore errors during background refresh
+                }
+                _uiState.value = _uiState.value.copy(refreshProgress = index + 1)
+            }
+
+            _uiState.value = _uiState.value.copy(isRefreshingFavorites = false)
+            CertCheckWidgetProvider.updateAll(getApplication())
+        }
     }
 
     fun onHostnameChanged(hostname: String) {
