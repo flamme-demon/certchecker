@@ -6,6 +6,7 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.view.View
 import android.widget.RemoteViews
 import de.guenthers.certcheck.MainActivity
 import de.guenthers.certcheck.R
@@ -49,26 +50,48 @@ class CertCheckWidgetProvider : AppWidgetProvider() {
 
         try {
             val database = CertCheckDatabase.getDatabase(context)
+            val favoriteDao = database.favoriteDao()
             val historyDao = database.checkHistoryDao()
+
+            // Get favorite IDs to filter
+            val favorites = favoriteDao.getAllFavorites().first()
+            val favoriteIds = favorites.map { it.id }.toSet()
+
             val latestChecks = historyDao.getLatestCheckPerFavorite().first()
+                .filter { it.favoriteId in favoriteIds }
 
             val okCount = latestChecks.count { it.overallStatus == "OK" }
-            val warningCount = latestChecks.count { it.overallStatus == "WARNING" }
-            val errorCount = latestChecks.count {
+            val warningChecks = latestChecks.filter { it.overallStatus == "WARNING" }
+            val errorChecks = latestChecks.filter {
                 it.overallStatus in listOf("CRITICAL", "ERROR")
             }
 
             views.setTextViewText(R.id.widget_ok_count, okCount.toString())
-            views.setTextViewText(R.id.widget_warning_count, warningCount.toString())
-            views.setTextViewText(R.id.widget_error_count, errorCount.toString())
+            views.setTextViewText(R.id.widget_warning_count, warningChecks.size.toString())
+            views.setTextViewText(R.id.widget_error_count, errorChecks.size.toString())
 
-            val dateFormat = SimpleDateFormat("dd/MM HH:mm", Locale.getDefault())
-            views.setTextViewText(
-                R.id.widget_last_update,
-                "Mis à jour : ${dateFormat.format(Date())}"
-            )
+            // Warning domains list
+            if (warningChecks.isNotEmpty()) {
+                val warningText = warningChecks.joinToString(", ") { it.hostname }
+                views.setTextViewText(R.id.widget_warning_list, "\u26A0 $warningText")
+                views.setViewVisibility(R.id.widget_warning_list, View.VISIBLE)
+            } else {
+                views.setViewVisibility(R.id.widget_warning_list, View.GONE)
+            }
+
+            // Error domains list
+            if (errorChecks.isNotEmpty()) {
+                val errorText = errorChecks.joinToString(", ") { it.hostname }
+                views.setTextViewText(R.id.widget_error_list, "\u2716 $errorText")
+                views.setViewVisibility(R.id.widget_error_list, View.VISIBLE)
+            } else {
+                views.setViewVisibility(R.id.widget_error_list, View.GONE)
+            }
+
+            val dateFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
+            views.setTextViewText(R.id.widget_last_update, dateFormat.format(Date()))
         } catch (_: Exception) {
-            views.setTextViewText(R.id.widget_last_update, "Erreur de chargement")
+            views.setTextViewText(R.id.widget_last_update, "Erreur")
         }
 
         return views
