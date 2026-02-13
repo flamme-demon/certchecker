@@ -45,10 +45,11 @@ fun DashboardContent(
     latestChecks: List<CheckHistoryEntity>,
     recentHistory: List<CheckHistoryEntity>,
     onDomainCheck: (String, Int) -> Unit,
+    alertThresholdDays: Int = 30,
     modifier: Modifier = Modifier,
 ) {
-    val expiringDomains = remember(latestChecks) {
-        latestChecks.filter { it.daysUntilExpiry != null && it.daysUntilExpiry!! <= 30 }
+    val expiringDomains = remember(latestChecks, alertThresholdDays) {
+        latestChecks.filter { it.daysUntilExpiry != null && it.daysUntilExpiry!! <= alertThresholdDays }
     }
     val totalChecked = latestChecks.size
     val okCount = latestChecks.count { it.overallStatus == "OK" }
@@ -142,6 +143,7 @@ fun DashboardContent(
                 Spacer(modifier = Modifier.height(4.dp))
                 ExpiringDomainsCard(
                     domains = expiringDomains,
+                    alertThresholdDays = alertThresholdDays,
                     onDomainClick = onDomainCheck,
                 )
             }
@@ -185,6 +187,7 @@ fun DashboardContent(
 @Composable
 private fun ExpiringDomainsCard(
     domains: List<CheckHistoryEntity>,
+    alertThresholdDays: Int = 30,
     onDomainClick: (String, Int) -> Unit,
 ) {
     OutlinedCard(
@@ -203,7 +206,7 @@ private fun ExpiringDomainsCard(
                     modifier = Modifier.size(20.dp)
                 )
                 Text(
-                    text = "Expirent dans moins de 30 jours",
+                    text = "Expirent dans moins de $alertThresholdDays jours",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = OrangeWarning,
@@ -636,6 +639,275 @@ private fun FavoriteItem(
             }
         }
     }
+}
+
+// ============================================================================
+// Settings Screen
+// ============================================================================
+
+@Composable
+fun SettingsContent(
+    checkHour: Int,
+    alertThresholdDays: Int,
+    notificationsEnabled: Boolean,
+    onCheckHourChanged: (Int) -> Unit,
+    onAlertThresholdChanged: (Int) -> Unit,
+    onNotificationsToggled: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var showTimePicker by remember { mutableStateOf(false) }
+
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Section: Notifications
+        item {
+            Text(
+                text = "Notifications",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+
+        item {
+            OutlinedCard(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.medium,
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Activer les notifications",
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                        Text(
+                            text = "Recevoir des alertes pour les certificats",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = notificationsEnabled,
+                        onCheckedChange = onNotificationsToggled,
+                    )
+                }
+            }
+        }
+
+        // Section: Vérification automatique
+        item {
+            Text(
+                text = "Vérification automatique",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+
+        item {
+            OutlinedCard(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.medium,
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Heure de vérification",
+                                style = MaterialTheme.typography.bodyLarge,
+                            )
+                            Text(
+                                text = "Les favoris seront vérifiés chaque jour à cette heure",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        FilledTonalButton(onClick = { showTimePicker = true }) {
+                            Icon(
+                                Icons.Filled.Schedule,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(String.format(Locale.getDefault(), "%02d:00", checkHour))
+                        }
+                    }
+                }
+            }
+        }
+
+        // Section: Seuil d'alerte
+        item {
+            Text(
+                text = "Seuil d'alerte",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+
+        item {
+            OutlinedCard(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.medium,
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "Alerte avant expiration",
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                    Text(
+                        text = "Recevoir une alerte quand un certificat expire dans moins de $alertThresholdDays jours",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "7j",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Slider(
+                            value = alertThresholdDays.toFloat(),
+                            onValueChange = { onAlertThresholdChanged(it.toInt()) },
+                            valueRange = 7f..90f,
+                            steps = 82,
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(horizontal = 8.dp),
+                        )
+                        Text(
+                            text = "90j",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+
+                    Text(
+                        text = "$alertThresholdDays jours",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center,
+                    )
+                }
+            }
+        }
+
+        // Section: Informations
+        item {
+            Text(
+                text = "Informations",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+
+        item {
+            OutlinedCard(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.medium,
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Icon(
+                            Icons.Filled.Info,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp),
+                        )
+                        Text(
+                            text = "Comment ça marche ?",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "CertCheck vérifie automatiquement les certificats SSL/TLS de vos domaines favoris une fois par jour. " +
+                                "Vous recevrez une notification si un certificat expire bientôt, si un changement est détecté, " +
+                                "ou si une erreur de connexion survient.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+
+        item { Spacer(modifier = Modifier.height(8.dp)) }
+    }
+
+    // Time picker dialog
+    if (showTimePicker) {
+        TimePickerDialog(
+            currentHour = checkHour,
+            onHourSelected = { hour ->
+                onCheckHourChanged(hour)
+                showTimePicker = false
+            },
+            onDismiss = { showTimePicker = false },
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TimePickerDialog(
+    currentHour: Int,
+    onHourSelected: (Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val timePickerState = rememberTimePickerState(
+        initialHour = currentHour,
+        initialMinute = 0,
+        is24Hour = true,
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Heure de vérification") },
+        text = {
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center,
+            ) {
+                TimePicker(state = timePickerState)
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onHourSelected(timePickerState.hour) }) {
+                Text("Confirmer")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Annuler")
+            }
+        },
+    )
 }
 
 // ============================================================================

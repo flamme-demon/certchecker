@@ -10,9 +10,11 @@ import androidx.core.app.NotificationCompat
 import androidx.work.*
 import de.guenthers.certcheck.MainActivity
 import de.guenthers.certcheck.R
+import de.guenthers.certcheck.UserPreferences
 import de.guenthers.certcheck.database.CertCheckDatabase
 import de.guenthers.certcheck.database.CertCheckRepository
 import kotlinx.coroutines.flow.first
+import java.util.Calendar
 import java.util.concurrent.TimeUnit
 
 class DailyCertificateCheckWorker(
@@ -23,6 +25,7 @@ class DailyCertificateCheckWorker(
     override suspend fun doWork(): Result {
         val database = CertCheckDatabase.getDatabase(context)
         val repository = CertCheckRepository(database)
+        val preferences = UserPreferences(context)
 
         val favorites = repository.getAllFavorites().first()
 
@@ -30,18 +33,21 @@ class DailyCertificateCheckWorker(
             return Result.success()
         }
 
+        val notificationsEnabled = preferences.notificationsEnabled.value
+        val alertThreshold = preferences.alertThresholdDays.value
+
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         createNotificationChannel(notificationManager)
-
-        var alertCount = 0
 
         for (favorite in favorites) {
             try {
                 val history = repository.checkAndSaveResult(favorite.id)
                 val changes = repository.checkChanges(favorite.id)
 
+                if (!notificationsEnabled) continue
+
                 when {
-                    history.daysUntilExpiry != null && history.daysUntilExpiry <= 30 -> {
+                    history.daysUntilExpiry != null && history.daysUntilExpiry <= alertThreshold -> {
                         showNotification(
                             notificationManager,
                             EXPIRY_ALERT_CHANNEL_ID,
@@ -49,7 +55,6 @@ class DailyCertificateCheckWorker(
                             "Certificat expire bientôt",
                             "${favorite.hostname}:${favorite.port} expire dans ${history.daysUntilExpiry} jours"
                         )
-                        alertCount++
                     }
 
                     changes != null -> {
@@ -60,7 +65,6 @@ class DailyCertificateCheckWorker(
                             "Changement détecté",
                             "${favorite.hostname}: ${changes.changes.joinToString(", ")}"
                         )
-                        alertCount++
                     }
 
                     history.error != null -> {
@@ -71,17 +75,18 @@ class DailyCertificateCheckWorker(
                             "Erreur de connexion",
                             "${favorite.hostname}: ${history.error}"
                         )
-                        alertCount++
                     }
                 }
             } catch (e: Exception) {
-                showNotification(
-                    notificationManager,
-                    ERROR_ALERT_CHANNEL_ID,
-                    favorite.id.toInt() + 2000,
-                    "Erreur",
-                    "Échec de vérification pour ${favorite.hostname}: ${e.message}"
-                )
+                if (notificationsEnabled) {
+                    showNotification(
+                        notificationManager,
+                        ERROR_ALERT_CHANNEL_ID,
+                        favorite.id.toInt() + 2000,
+                        "Erreur",
+                        "Échec de vérification pour ${favorite.hostname}: ${e.message}"
+                    )
+                }
             }
         }
 
@@ -143,21 +148,34 @@ class DailyCertificateCheckWorker(
         const val CHANGE_ALERT_CHANNEL_ID = "change_alerts"
         const val ERROR_ALERT_CHANNEL_ID = "error_alerts"
 
-        fun schedule(context: Context) {
+        fun schedule(context: Context, checkHour: Int = UserPreferences.DEFAULT_CHECK_HOUR) {
             val constraints = Constraints.Builder()
                 .setRequiredNetworkType(NetworkType.CONNECTED)
                 .build()
+
+            val now = Calendar.getInstance()
+            val target = Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, checkHour)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+                if (before(now)) {
+                    add(Calendar.DAY_OF_MONTH, 1)
+                }
+            }
+
+            val initialDelayMillis = target.timeInMillis - now.timeInMillis
 
             val workRequest = PeriodicWorkRequestBuilder<DailyCertificateCheckWorker>(
                 1, TimeUnit.DAYS
             )
                 .setConstraints(constraints)
-                .setInitialDelay(1, TimeUnit.HOURS)
+                .setInitialDelay(initialDelayMillis, TimeUnit.MILLISECONDS)
                 .build()
 
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(
                 WORK_NAME,
-                ExistingPeriodicWorkPolicy.KEEP,
+                ExistingPeriodicWorkPolicy.REPLACE,
                 workRequest
             )
         }

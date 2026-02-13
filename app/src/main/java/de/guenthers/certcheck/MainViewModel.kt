@@ -32,6 +32,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val database = CertCheckDatabase.getDatabase(application)
     private val repository = CertCheckRepository(database)
+    val preferences = UserPreferences(application)
 
     private val _uiState = MutableStateFlow(MainUiState())
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
@@ -46,7 +47,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     init {
-        DailyCertificateCheckWorker.schedule(application)
+        DailyCertificateCheckWorker.schedule(application, preferences.checkHour.value)
     }
 
     fun onHostnameChanged(hostname: String) {
@@ -135,6 +136,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         _uiState.value = _uiState.value.copy(hostname = hostWithPort)
         checkIfFavorite()
+    }
+
+    fun updateCheckHour(hour: Int) {
+        preferences.setCheckHour(hour)
+        DailyCertificateCheckWorker.schedule(getApplication(), hour)
+    }
+
+    fun updateAlertThreshold(days: Int) {
+        preferences.setAlertThresholdDays(days)
+    }
+
+    fun updateNotificationsEnabled(enabled: Boolean) {
+        preferences.setNotificationsEnabled(enabled)
     }
 
     private fun parseHostnameAndPort(input: String): Pair<String, Int> {

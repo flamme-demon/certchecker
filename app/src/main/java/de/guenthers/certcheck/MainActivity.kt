@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.*
@@ -25,6 +26,7 @@ import de.guenthers.certcheck.ui.screens.DashboardContent
 import de.guenthers.certcheck.ui.screens.FavoritesContent
 import de.guenthers.certcheck.ui.screens.HistoryContent
 import de.guenthers.certcheck.ui.screens.ResultContent
+import de.guenthers.certcheck.ui.screens.SettingsContent
 import de.guenthers.certcheck.ui.theme.CertCheckTheme
 
 class MainActivity : ComponentActivity() {
@@ -49,7 +51,12 @@ fun CertCheckApp(viewModel: MainViewModel = viewModel(factory = MainViewModel.Fa
     val checkHistory by viewModel.checkHistory.collectAsState()
     val latestChecks by viewModel.latestChecks.collectAsState()
 
+    val checkHour by viewModel.preferences.checkHour.collectAsState()
+    val alertThresholdDays by viewModel.preferences.alertThresholdDays.collectAsState()
+    val notificationsEnabled by viewModel.preferences.notificationsEnabled.collectAsState()
+
     var selectedTab by remember { mutableIntStateOf(0) }
+    var showSettings by remember { mutableStateOf(false) }
     val showResult = uiState.result != null && !uiState.isLoading
     val tabTitles = listOf("Accueil", "Historique", "Favoris")
 
@@ -59,6 +66,18 @@ fun CertCheckApp(viewModel: MainViewModel = viewModel(factory = MainViewModel.Fa
                 title = {
                     if (showResult) {
                         Text(uiState.result!!.hostname)
+                    } else if (showSettings) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                Icons.Filled.Settings,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Text("CertCheck — Paramètres")
+                        }
                     } else {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -74,8 +93,11 @@ fun CertCheckApp(viewModel: MainViewModel = viewModel(factory = MainViewModel.Fa
                     }
                 },
                 navigationIcon = {
-                    if (showResult) {
-                        IconButton(onClick = { viewModel.clearResult() }) {
+                    if (showResult || showSettings) {
+                        IconButton(onClick = {
+                            if (showResult) viewModel.clearResult()
+                            if (showSettings) showSettings = false
+                        }) {
                             Icon(
                                 Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "Retour"
@@ -98,6 +120,13 @@ fun CertCheckApp(viewModel: MainViewModel = viewModel(factory = MainViewModel.Fa
                         IconButton(onClick = { viewModel.checkCertificate() }) {
                             Icon(Icons.Filled.Refresh, contentDescription = "Revérifier")
                         }
+                    } else if (!showSettings) {
+                        IconButton(onClick = { showSettings = true }) {
+                            Icon(
+                                Icons.Filled.Settings,
+                                contentDescription = "Paramètres",
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -108,27 +137,30 @@ fun CertCheckApp(viewModel: MainViewModel = viewModel(factory = MainViewModel.Fa
         bottomBar = {
             NavigationBar {
                 NavigationBarItem(
-                    selected = selectedTab == 0 && !showResult,
+                    selected = selectedTab == 0 && !showResult && !showSettings,
                     onClick = {
                         selectedTab = 0
+                        showSettings = false
                         if (showResult) viewModel.clearResult()
                     },
                     icon = { Icon(Icons.Filled.Home, contentDescription = "Accueil") },
                     label = { Text("Accueil") }
                 )
                 NavigationBarItem(
-                    selected = selectedTab == 1 && !showResult,
+                    selected = selectedTab == 1 && !showResult && !showSettings,
                     onClick = {
                         selectedTab = 1
+                        showSettings = false
                         if (showResult) viewModel.clearResult()
                     },
                     icon = { Icon(Icons.Filled.History, contentDescription = "Historique") },
                     label = { Text("Historique") }
                 )
                 NavigationBarItem(
-                    selected = selectedTab == 2 && !showResult,
+                    selected = selectedTab == 2 && !showResult && !showSettings,
                     onClick = {
                         selectedTab = 2
+                        showSettings = false
                         if (showResult) viewModel.clearResult()
                     },
                     icon = { Icon(Icons.Filled.Star, contentDescription = "Favoris") },
@@ -137,7 +169,17 @@ fun CertCheckApp(viewModel: MainViewModel = viewModel(factory = MainViewModel.Fa
             }
         }
     ) { padding ->
-        if (showResult) {
+        if (showSettings) {
+            SettingsContent(
+                checkHour = checkHour,
+                alertThresholdDays = alertThresholdDays,
+                notificationsEnabled = notificationsEnabled,
+                onCheckHourChanged = viewModel::updateCheckHour,
+                onAlertThresholdChanged = viewModel::updateAlertThreshold,
+                onNotificationsToggled = viewModel::updateNotificationsEnabled,
+                modifier = Modifier.padding(padding),
+            )
+        } else if (showResult) {
             ResultContent(
                 result = uiState.result!!,
                 modifier = Modifier.padding(padding),
@@ -151,6 +193,7 @@ fun CertCheckApp(viewModel: MainViewModel = viewModel(factory = MainViewModel.Fa
                     latestChecks = latestChecks,
                     recentHistory = checkHistory,
                     onDomainCheck = viewModel::checkDomain,
+                    alertThresholdDays = alertThresholdDays,
                     modifier = Modifier.padding(padding),
                 )
                 1 -> HistoryContent(
