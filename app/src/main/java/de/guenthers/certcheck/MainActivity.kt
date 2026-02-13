@@ -25,14 +25,16 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun CertCheckApp(viewModel: MainViewModel = viewModel()) {
+fun CertCheckApp(viewModel: MainViewModel = viewModel(factory = MainViewModel.Factory)) {
     val uiState by viewModel.uiState.collectAsState()
 
     if (uiState.result != null && !uiState.isLoading) {
         ResultScreen(
             result = uiState.result!!,
             onBack = { viewModel.clearResult() },
-            onRecheck = { viewModel.checkCertificate() }
+            onRecheck = { viewModel.checkCertificate() },
+            isFavorite = uiState.isFavorite,
+            onToggleFavorite = viewModel::toggleFavorite
         )
     } else {
         HomeScreen(
@@ -40,6 +42,10 @@ fun CertCheckApp(viewModel: MainViewModel = viewModel()) {
             onHostnameChanged = viewModel::onHostnameChanged,
             onCheck = viewModel::checkCertificate,
             onHistoryItemClick = viewModel::loadFromHistory,
+            favorites = viewModel.favorites.value,
+            onFavoriteClick = viewModel::loadFromFavorite,
+            onFavoriteDelete = viewModel::removeFavorite,
+            onFavoriteRefresh = viewModel::refreshFavorite,
         )
     }
 }

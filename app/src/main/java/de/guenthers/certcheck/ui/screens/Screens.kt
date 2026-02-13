@@ -18,10 +18,12 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import de.guenthers.certcheck.MainUiState
+import de.guenthers.certcheck.database.FavoriteEntity
 import de.guenthers.certcheck.model.*
 import de.guenthers.certcheck.ui.components.*
 import de.guenthers.certcheck.ui.theme.*
 import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.*
 
 // ============================================================================
@@ -35,6 +37,10 @@ fun HomeScreen(
     onHostnameChanged: (String) -> Unit,
     onCheck: () -> Unit,
     onHistoryItemClick: (CertCheckResult) -> Unit,
+    favorites: List<de.guenthers.certcheck.database.FavoriteEntity>,
+    onFavoriteClick: (de.guenthers.certcheck.database.FavoriteEntity) -> Unit,
+    onFavoriteDelete: (Long) -> Unit,
+    onFavoriteRefresh: (Long) -> Unit,
 ) {
     Scaffold(
         topBar = {
@@ -159,25 +165,36 @@ fun HomeScreen(
                     HistoryItem(result = result, onClick = { onHistoryItemClick(result) })
                 }
             }
+
+            // Favorites
+            if (favorites.isNotEmpty()) {
+                item {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Favoris",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                }
+
+                items(favorites) { favorite ->
+                    FavoriteItem(
+                        favorite = favorite,
+                        onClick = { onFavoriteClick(favorite) },
+                        onDelete = { onFavoriteDelete(favorite.id) },
+                        onRefresh = { onFavoriteRefresh(favorite.id) }
+                    )
+                }
+            }
         }
     }
 }
-
-@Composable
-private fun HistoryItem(result: CertCheckResult, onClick: () -> Unit) {
-    val dateFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
-    val statusColor = when (result.overallStatus) {
-        CheckStatus.OK -> GreenOk
-        CheckStatus.WARNING -> OrangeWarning
-        CheckStatus.CRITICAL -> RedCritical
-        CheckStatus.ERROR -> RedCritical
-    }
-
-    OutlinedCard(
-        modifier = Modifier.fillMaxWidth(),
-        onClick = onClick,
-        shape = MaterialTheme.shapes.medium,
-    ) {
         Row(
             modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -214,6 +231,63 @@ private fun HistoryItem(result: CertCheckResult, onClick: () -> Unit) {
     }
 }
 
+@Composable
+private fun FavoriteItem(
+    favorite: FavoriteEntity,
+    onClick: () -> Unit,
+    onDelete: () -> Unit,
+    onRefresh: () -> Unit,
+) {
+    val hostWithPort = if (favorite.port == 443) {
+        favorite.hostname
+    } else {
+        "${favorite.hostname}:${favorite.port}"
+    }
+
+    OutlinedCard(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = onClick,
+        shape = MaterialTheme.shapes.medium,
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Star,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(24.dp)
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = hostWithPort,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Medium
+                )
+                favorite.lastCheckedAt?.let { timestamp ->
+                    Text(
+                        text = "Dernière vérification: ${SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date(timestamp))}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            IconButton(onClick = onRefresh) {
+                Icon(Icons.Filled.Refresh, contentDescription = "Vérifier")
+            }
+            IconButton(onClick = onDelete) {
+                Icon(
+                    Icons.Filled.Delete,
+                    contentDescription = "Supprimer",
+                    tint = MaterialTheme.colorScheme.error
+                )
+            }
+        }
+    }
+}
+
 // ============================================================================
 // Result Screen - Détails complets du résultat
 // ============================================================================
@@ -224,6 +298,8 @@ fun ResultScreen(
     result: CertCheckResult,
     onBack: () -> Unit,
     onRecheck: () -> Unit,
+    isFavorite: Boolean,
+    onToggleFavorite: () -> Unit,
 ) {
     Scaffold(
         topBar = {
@@ -235,6 +311,13 @@ fun ResultScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = onToggleFavorite) {
+                        Icon(
+                            imageVector = if (isFavorite) Icons.Filled.Star else Icons.Filled.StarBorder,
+                            contentDescription = if (isFavorite) "Retirer des favoris" else "Ajouter aux favoris",
+                            tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                     IconButton(onClick = onRecheck) {
                         Icon(Icons.Filled.Refresh, contentDescription = "Revérifier")
                     }
