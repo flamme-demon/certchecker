@@ -188,6 +188,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         preferences.setNotificationsEnabled(enabled)
     }
 
+    fun updateWidgetColor(color: Int) {
+        preferences.setWidgetColor(color)
+        CertCheckWidgetProvider.updateAll(getApplication())
+    }
+
+    fun updateWidgetOpacity(opacity: Int) {
+        preferences.setWidgetOpacity(opacity)
+        CertCheckWidgetProvider.updateAll(getApplication())
+    }
+
     private fun parseHostnameAndPort(input: String): Pair<String, Int> {
         val cleanInput = input
             .removePrefix("https://")

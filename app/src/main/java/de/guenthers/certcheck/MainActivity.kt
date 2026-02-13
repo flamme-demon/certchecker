@@ -80,6 +80,8 @@ fun CertCheckApp(viewModel: MainViewModel = viewModel(factory = MainViewModel.Fa
     val checkHour by viewModel.preferences.checkHour.collectAsState()
     val alertThresholdDays by viewModel.preferences.alertThresholdDays.collectAsState()
     val notificationsEnabled by viewModel.preferences.notificationsEnabled.collectAsState()
+    val widgetColor by viewModel.preferences.widgetColor.collectAsState()
+    val widgetOpacity by viewModel.preferences.widgetOpacity.collectAsState()
 
     var selectedTab by remember { mutableIntStateOf(0) }
     var showSettings by remember { mutableStateOf(false) }
@@ -220,6 +222,10 @@ fun CertCheckApp(viewModel: MainViewModel = viewModel(factory = MainViewModel.Fa
                 onCheckHourChanged = viewModel::updateCheckHour,
                 onAlertThresholdChanged = viewModel::updateAlertThreshold,
                 onNotificationsToggled = viewModel::updateNotificationsEnabled,
+                widgetColor = widgetColor,
+                widgetOpacity = widgetOpacity,
+                onWidgetColorChanged = viewModel::updateWidgetColor,
+                onWidgetOpacityChanged = viewModel::updateWidgetOpacity,
                 modifier = Modifier.padding(padding),
             )
         } else if (showResult) {

@@ -6,10 +6,12 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.graphics.PorterDuff
 import android.view.View
 import android.widget.RemoteViews
 import de.guenthers.certcheck.MainActivity
 import de.guenthers.certcheck.R
+import de.guenthers.certcheck.UserPreferences
 import de.guenthers.certcheck.database.CertCheckDatabase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -39,6 +41,23 @@ class CertCheckWidgetProvider : AppWidgetProvider() {
 
     private suspend fun buildRemoteViews(context: Context): RemoteViews {
         val views = RemoteViews(context.packageName, R.layout.widget_certcheck)
+        val preferences = UserPreferences(context)
+
+        // Apply dynamic background color + opacity
+        val baseColor = preferences.widgetColor.value
+        val opacity = preferences.widgetOpacity.value
+        val alpha = (opacity * 255 / 100)
+        val argbColor = (alpha shl 24) or (baseColor and 0x00FFFFFF)
+        views.setInt(R.id.widget_bg, "setColorFilter", argbColor)
+        views.setInt(R.id.widget_bg, "setImageAlpha", 255)
+
+        // Adjust text colors for light backgrounds
+        val isLight = baseColor == 0xFFFFFF
+        val titleColor = if (isLight) 0xFF1565C0.toInt() else 0xFF90CAF9.toInt()
+        val subtitleColor = if (isLight) 0xFF666666.toInt() else 0xB0FFFFFF.toInt()
+        val updateColor = if (isLight) 0xFF999999.toInt() else 0x80FFFFFF.toInt()
+        views.setTextColor(R.id.widget_title, titleColor)
+        views.setTextColor(R.id.widget_last_update, updateColor)
 
         // Click opens the app
         val intent = Intent(context, MainActivity::class.java)

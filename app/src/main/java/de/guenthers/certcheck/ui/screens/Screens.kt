@@ -1,10 +1,13 @@
 package de.guenthers.certcheck.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -14,6 +17,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -21,6 +25,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import de.guenthers.certcheck.MainUiState
@@ -693,6 +698,10 @@ fun SettingsContent(
     onCheckHourChanged: (Int) -> Unit,
     onAlertThresholdChanged: (Int) -> Unit,
     onNotificationsToggled: (Boolean) -> Unit,
+    widgetColor: Int,
+    widgetOpacity: Int,
+    onWidgetColorChanged: (Int) -> Unit,
+    onWidgetOpacityChanged: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var showTimePicker by remember { mutableStateOf(false) }
@@ -849,6 +858,156 @@ fun SettingsContent(
                         modifier = Modifier.fillMaxWidth(),
                         textAlign = TextAlign.Center,
                     )
+                }
+            }
+        }
+
+        // Section: Widget
+        item {
+            Text(
+                text = "Widget",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+
+        item {
+            OutlinedCard(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.medium,
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "Couleur de fond",
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                    Text(
+                        text = "Choisissez la couleur d'arrière-plan du widget",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    val colorOptions = listOf(
+                        0x000000 to "Noir",
+                        0x1A1A2E to "Bleu nuit",
+                        0x1B2631 to "Ardoise",
+                        0x0D1B2A to "Marine",
+                        0x2C2C2C to "Gris foncé",
+                        0xFFFFFF to "Blanc",
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                    ) {
+                        colorOptions.forEach { (color, label) ->
+                            val isSelected = widgetColor == color
+                            val bgColor = Color(color or (0xFF shl 24))
+                            val borderColor = if (isSelected) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { onWidgetColorChanged(color) }
+                                    .padding(4.dp),
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(bgColor)
+                                        .border(
+                                            width = if (isSelected) 3.dp else 1.dp,
+                                            color = borderColor,
+                                            shape = CircleShape,
+                                        ),
+                                )
+                                Text(
+                                    text = label,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 9.sp,
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    Text(
+                        text = "Opacité",
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                    Text(
+                        text = "Réglez la transparence du widget",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "0%",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Slider(
+                            value = widgetOpacity.toFloat(),
+                            onValueChange = { onWidgetOpacityChanged(it.toInt()) },
+                            valueRange = 0f..100f,
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(horizontal = 8.dp),
+                        )
+                        Text(
+                            text = "100%",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+
+                    Text(
+                        text = "${widgetOpacity}%",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center,
+                    )
+
+                    // Preview
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "Aperçu",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    val alpha = (widgetOpacity * 255 / 100)
+                    val previewColor = Color((alpha shl 24) or widgetColor)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(previewColor),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = "CertCheck",
+                            color = if (widgetColor == 0xFFFFFF) Color(0xFF333333) else Color(0x90CAF9.toInt() or (0xFF shl 24)),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
                 }
             }
         }
