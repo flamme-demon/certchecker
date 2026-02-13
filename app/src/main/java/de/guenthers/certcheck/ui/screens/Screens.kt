@@ -991,14 +991,14 @@ fun SettingsContent(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(modifier = Modifier.height(4.dp))
-                    val alpha = (widgetOpacity * 255 / 100)
-                    val previewColor = Color((alpha shl 24) or widgetColor)
+                    val solidColor = Color(0xFF000000.toInt() or widgetColor)
+                    val alphaFraction = widgetOpacity / 100f
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(48.dp)
                             .clip(RoundedCornerShape(16.dp))
-                            .background(previewColor),
+                            .background(solidColor.copy(alpha = alphaFraction)),
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(

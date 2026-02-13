@@ -46,10 +46,10 @@ class CertCheckWidgetProvider : AppWidgetProvider() {
         // Apply dynamic background color + opacity
         val baseColor = preferences.widgetColor.value
         val opacity = preferences.widgetOpacity.value
-        val alpha = (opacity * 255 / 100)
-        val argbColor = (alpha shl 24) or (baseColor and 0x00FFFFFF)
-        views.setInt(R.id.widget_bg, "setColorFilter", argbColor)
-        views.setInt(R.id.widget_bg, "setImageAlpha", 255)
+        // Color filter at full opacity for the color, imageAlpha for transparency
+        val solidColor = 0xFF000000.toInt() or (baseColor and 0x00FFFFFF)
+        views.setInt(R.id.widget_bg, "setColorFilter", solidColor)
+        views.setInt(R.id.widget_bg, "setImageAlpha", (opacity * 255 / 100))
 
         // Adjust text colors for light backgrounds
         val isLight = baseColor == 0xFFFFFF
