@@ -80,7 +80,7 @@ class CertCheckRepository(private val database: CertCheckDatabase) {
     }
 
     suspend fun getAllFavoritesSync(): List<FavoriteEntity> {
-        return kotlinx.coroutines.flow.first(favoriteDao.getAllFavorites())
+        return favoriteDao.getAllFavorites().first()
     }
 
     private fun CertCheckResult.toHistoryEntity(favoriteId: Long): CheckHistoryEntity {
