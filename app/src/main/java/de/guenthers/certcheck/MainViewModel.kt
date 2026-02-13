@@ -3,10 +3,10 @@ package de.guenthers.certcheck
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelFactory
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.CreationExtras
 import androidx.lifecycle.viewmodel.compose.APPLICATION_KEY
+import androidx.lifecycle.viewmodel.compose.ViewModelFactory
 import de.guenthers.certcheck.database.CertCheckDatabase
 import de.guenthers.certcheck.database.CertCheckRepository
 import de.guenthers.certcheck.database.CheckHistoryEntity
