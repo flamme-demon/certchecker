@@ -3,10 +3,11 @@ package de.guenthers.certcheck
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.CreationExtras
-import androidx.lifecycle.viewmodel.compose.APPLICATION_KEY
-import androidx.lifecycle.viewmodel.compose.ViewModelFactory
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import de.guenthers.certcheck.database.CertCheckDatabase
 import de.guenthers.certcheck.database.CertCheckRepository
 import de.guenthers.certcheck.database.CheckHistoryEntity
@@ -159,10 +160,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     companion object {
-        val Factory: ViewModelFactory = object : ViewModelFactory {
-            @Suppress("UNCHECKED_CAST")
-            override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
-                return MainViewModel(extras[APPLICATION_KEY] as Application) as T
+        val Factory: ViewModelProvider.Factory = viewModelFactory {
+            initializer {
+                MainViewModel(Application())
             }
         }
     }
