@@ -31,6 +31,7 @@ data class MainUiState(
     val isRefreshingFavorites: Boolean = false,
     val refreshProgress: Int = 0,
     val refreshTotal: Int = 0,
+    val refreshingFavoriteIds: Set<Long> = emptySet(),
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -151,7 +152,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun refreshFavorite(favoriteId: Long) {
         viewModelScope.launch(Dispatchers.IO) {
-            repository.checkAndSaveResult(favoriteId)
+            _uiState.value = _uiState.value.copy(
+                refreshingFavoriteIds = _uiState.value.refreshingFavoriteIds + favoriteId
+            )
+            try {
+                repository.checkAndSaveResult(favoriteId)
+            } catch (_: Exception) {
+                // Silently ignore errors during refresh
+            } finally {
+                _uiState.value = _uiState.value.copy(
+                    refreshingFavoriteIds = _uiState.value.refreshingFavoriteIds - favoriteId
+                )
+            }
         }
     }
 
@@ -178,7 +190,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun updateCheckTime(hour: Int, minute: Int) {
         preferences.setCheckHour(hour)
         preferences.setCheckMinute(minute)
-        DailyCertificateCheckWorker.schedule(getApplication(), hour, minute)
+        DailyCertificateCheckWorker.reschedule(getApplication(), hour, minute)
     }
 
     fun updateAlertThreshold(days: Int) {

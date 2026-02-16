@@ -485,6 +485,9 @@ fun FavoritesContent(
     onFavoriteDelete: (Long) -> Unit,
     onFavoriteRefresh: (Long) -> Unit,
     onFavoriteToggleNotifications: (Long) -> Unit,
+    refreshingFavoriteIds: Set<Long> = emptySet(),
+    isRefreshingAll: Boolean = false,
+    onRefreshAll: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val checksByFavoriteId = remember(latestChecks) {
@@ -522,6 +525,32 @@ fun FavoritesContent(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    FilledTonalButton(
+                        onClick = onRefreshAll,
+                        enabled = !isRefreshingAll,
+                    ) {
+                        if (isRefreshingAll) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                            )
+                        } else {
+                            Icon(
+                                Icons.Filled.Refresh,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(if (isRefreshingAll) "Mise à jour…" else "Tout rafraîchir")
+                    }
+                }
+            }
             items(favorites) { favorite ->
                 FavoriteItem(
                     favorite = favorite,
@@ -530,6 +559,7 @@ fun FavoritesContent(
                     onDelete = { onFavoriteDelete(favorite.id) },
                     onRefresh = { onFavoriteRefresh(favorite.id) },
                     onToggleNotifications = { onFavoriteToggleNotifications(favorite.id) },
+                    isRefreshing = refreshingFavoriteIds.contains(favorite.id),
                 )
             }
             item { Spacer(modifier = Modifier.height(8.dp)) }
@@ -545,6 +575,7 @@ private fun FavoriteItem(
     onDelete: () -> Unit,
     onRefresh: () -> Unit,
     onToggleNotifications: () -> Unit,
+    isRefreshing: Boolean = false,
 ) {
     val hostWithPort = if (favorite.port == 443) {
         favorite.hostname
@@ -672,8 +703,15 @@ private fun FavoriteItem(
                     modifier = Modifier.size(20.dp),
                 )
             }
-            IconButton(onClick = onRefresh) {
-                Icon(Icons.Filled.Refresh, contentDescription = "Vérifier")
+            if (isRefreshing) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp,
+                )
+            } else {
+                IconButton(onClick = onRefresh) {
+                    Icon(Icons.Filled.Refresh, contentDescription = "Vérifier")
+                }
             }
             IconButton(onClick = onDelete) {
                 Icon(

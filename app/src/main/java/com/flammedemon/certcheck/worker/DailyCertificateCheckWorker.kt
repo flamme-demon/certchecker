@@ -155,6 +155,14 @@ class DailyCertificateCheckWorker(
         const val ERROR_ALERT_CHANNEL_ID = "error_alerts"
 
         fun schedule(context: Context, checkHour: Int = UserPreferences.DEFAULT_CHECK_HOUR, checkMinute: Int = UserPreferences.DEFAULT_CHECK_MINUTE) {
+            enqueueWork(context, checkHour, checkMinute, ExistingPeriodicWorkPolicy.KEEP)
+        }
+
+        fun reschedule(context: Context, checkHour: Int, checkMinute: Int) {
+            enqueueWork(context, checkHour, checkMinute, ExistingPeriodicWorkPolicy.REPLACE)
+        }
+
+        private fun enqueueWork(context: Context, checkHour: Int, checkMinute: Int, policy: ExistingPeriodicWorkPolicy) {
             val constraints = Constraints.Builder()
                 .setRequiredNetworkType(NetworkType.CONNECTED)
                 .build()
@@ -181,7 +189,7 @@ class DailyCertificateCheckWorker(
 
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(
                 WORK_NAME,
-                ExistingPeriodicWorkPolicy.REPLACE,
+                policy,
                 workRequest
             )
         }
