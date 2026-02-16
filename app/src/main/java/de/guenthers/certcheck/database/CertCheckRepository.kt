@@ -81,10 +81,6 @@ class CertCheckRepository(private val database: CertCheckDatabase) {
             changes.add("Certificate fingerprint changed")
         }
 
-        if (previous.daysUntilExpiry != current.daysUntilExpiry) {
-            changes.add("Days until expiry changed: ${previous.daysUntilExpiry} -> ${current.daysUntilExpiry}")
-        }
-
         return if (changes.isNotEmpty()) {
             ChangeDetection(
                 favoriteId = favoriteId,

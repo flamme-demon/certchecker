@@ -48,36 +48,37 @@ class DailyCertificateCheckWorker(
                 // Skip notifications if globally disabled or disabled for this favorite
                 if (!notificationsEnabled || !favorite.notificationsEnabled) continue
 
-                when {
-                    history.daysUntilExpiry != null && history.daysUntilExpiry <= alertThreshold -> {
-                        showNotification(
-                            notificationManager,
-                            EXPIRY_ALERT_CHANNEL_ID,
-                            favorite.id.toInt(),
-                            "Certificat expire bientôt",
-                            "${favorite.hostname}:${favorite.port} expire dans ${history.daysUntilExpiry} jours"
-                        )
-                    }
+                // Notification 1: Certificate expires within the configured threshold
+                if (history.daysUntilExpiry != null && history.daysUntilExpiry <= alertThreshold) {
+                    showNotification(
+                        notificationManager,
+                        EXPIRY_ALERT_CHANNEL_ID,
+                        favorite.id.toInt(),
+                        "Certificat expire bientôt",
+                        "${favorite.hostname}:${favorite.port} expire dans ${history.daysUntilExpiry} jours"
+                    )
+                }
 
-                    changes != null -> {
-                        showNotification(
-                            notificationManager,
-                            CHANGE_ALERT_CHANNEL_ID,
-                            favorite.id.toInt() + 1000,
-                            "Changement détecté",
-                            "${favorite.hostname}: ${changes.changes.joinToString(", ")}"
-                        )
-                    }
+                // Notification 2: Status changed from valid (OK) to any other state
+                if (changes != null && changes.previousStatus == "OK" && changes.newStatus != "OK") {
+                    showNotification(
+                        notificationManager,
+                        CHANGE_ALERT_CHANNEL_ID,
+                        favorite.id.toInt() + 1000,
+                        "Certificat invalide",
+                        "${favorite.hostname}: ${changes.changes.joinToString(", ")}"
+                    )
+                }
 
-                    history.error != null -> {
-                        showNotification(
-                            notificationManager,
-                            ERROR_ALERT_CHANNEL_ID,
-                            favorite.id.toInt() + 2000,
-                            "Erreur de connexion",
-                            "${favorite.hostname}: ${history.error}"
-                        )
-                    }
+                // Notification 3: Connection error
+                if (history.error != null) {
+                    showNotification(
+                        notificationManager,
+                        ERROR_ALERT_CHANNEL_ID,
+                        favorite.id.toInt() + 2000,
+                        "Erreur de connexion",
+                        "${favorite.hostname}: ${history.error}"
+                    )
                 }
             } catch (e: Exception) {
                 if (notificationsEnabled && favorite.notificationsEnabled) {
