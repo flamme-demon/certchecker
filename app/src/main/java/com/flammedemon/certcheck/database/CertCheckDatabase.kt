@@ -1,4 +1,4 @@
-package de.guenthers.certcheck.database
+package com.flammedemon.certcheck.database
 
 import android.content.Context
 import androidx.room.Database

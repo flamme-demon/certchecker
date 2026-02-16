@@ -52,7 +52,7 @@ L'APK sera dans `app/build/outputs/apk/debug/`.
 ## Architecture
 
 ```
-de.guenthers.certcheck/
+com.flammedemon.certcheck/
 ├── MainActivity.kt          # Point d'entrée
 ├── MainViewModel.kt         # State management
 ├── model/

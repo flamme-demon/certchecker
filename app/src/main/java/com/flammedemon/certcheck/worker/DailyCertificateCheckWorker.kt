@@ -1,4 +1,4 @@
-package de.guenthers.certcheck.worker
+package com.flammedemon.certcheck.worker
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -8,12 +8,12 @@ import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.work.*
-import de.guenthers.certcheck.MainActivity
-import de.guenthers.certcheck.R
-import de.guenthers.certcheck.UserPreferences
-import de.guenthers.certcheck.database.CertCheckDatabase
-import de.guenthers.certcheck.database.CertCheckRepository
-import de.guenthers.certcheck.widget.CertCheckWidgetProvider
+import com.flammedemon.certcheck.MainActivity
+import com.flammedemon.certcheck.R
+import com.flammedemon.certcheck.UserPreferences
+import com.flammedemon.certcheck.database.CertCheckDatabase
+import com.flammedemon.certcheck.database.CertCheckRepository
+import com.flammedemon.certcheck.widget.CertCheckWidgetProvider
 import kotlinx.coroutines.flow.first
 import java.util.Calendar
 import java.util.concurrent.TimeUnit
@@ -48,36 +48,37 @@ class DailyCertificateCheckWorker(
                 // Skip notifications if globally disabled or disabled for this favorite
                 if (!notificationsEnabled || !favorite.notificationsEnabled) continue
 
-                when {
-                    history.daysUntilExpiry != null && history.daysUntilExpiry <= alertThreshold -> {
-                        showNotification(
-                            notificationManager,
-                            EXPIRY_ALERT_CHANNEL_ID,
-                            favorite.id.toInt(),
-                            "Certificat expire bientôt",
-                            "${favorite.hostname}:${favorite.port} expire dans ${history.daysUntilExpiry} jours"
-                        )
-                    }
+                // Notification 1: Certificate expires within the configured threshold
+                if (history.daysUntilExpiry != null && history.daysUntilExpiry <= alertThreshold) {
+                    showNotification(
+                        notificationManager,
+                        EXPIRY_ALERT_CHANNEL_ID,
+                        favorite.id.toInt(),
+                        "Certificat expire bientôt",
+                        "${favorite.hostname}:${favorite.port} expire dans ${history.daysUntilExpiry} jours"
+                    )
+                }
 
-                    changes != null -> {
-                        showNotification(
-                            notificationManager,
-                            CHANGE_ALERT_CHANNEL_ID,
-                            favorite.id.toInt() + 1000,
-                            "Changement détecté",
-                            "${favorite.hostname}: ${changes.changes.joinToString(", ")}"
-                        )
-                    }
+                // Notification 2: Status changed from valid (OK) to any other state
+                if (changes != null && changes.previousStatus == "OK" && changes.newStatus != "OK") {
+                    showNotification(
+                        notificationManager,
+                        CHANGE_ALERT_CHANNEL_ID,
+                        favorite.id.toInt() + 1000,
+                        "Certificat invalide",
+                        "${favorite.hostname}: ${changes.changes.joinToString(", ")}"
+                    )
+                }
 
-                    history.error != null -> {
-                        showNotification(
-                            notificationManager,
-                            ERROR_ALERT_CHANNEL_ID,
-                            favorite.id.toInt() + 2000,
-                            "Erreur de connexion",
-                            "${favorite.hostname}: ${history.error}"
-                        )
-                    }
+                // Notification 3: Connection error
+                if (history.error != null) {
+                    showNotification(
+                        notificationManager,
+                        ERROR_ALERT_CHANNEL_ID,
+                        favorite.id.toInt() + 2000,
+                        "Erreur de connexion",
+                        "${favorite.hostname}: ${history.error}"
+                    )
                 }
             } catch (e: Exception) {
                 if (notificationsEnabled && favorite.notificationsEnabled) {
@@ -153,7 +154,7 @@ class DailyCertificateCheckWorker(
         const val CHANGE_ALERT_CHANNEL_ID = "change_alerts"
         const val ERROR_ALERT_CHANNEL_ID = "error_alerts"
 
-        fun schedule(context: Context, checkHour: Int = UserPreferences.DEFAULT_CHECK_HOUR) {
+        fun schedule(context: Context, checkHour: Int = UserPreferences.DEFAULT_CHECK_HOUR, checkMinute: Int = UserPreferences.DEFAULT_CHECK_MINUTE) {
             val constraints = Constraints.Builder()
                 .setRequiredNetworkType(NetworkType.CONNECTED)
                 .build()
@@ -161,7 +162,7 @@ class DailyCertificateCheckWorker(
             val now = Calendar.getInstance()
             val target = Calendar.getInstance().apply {
                 set(Calendar.HOUR_OF_DAY, checkHour)
-                set(Calendar.MINUTE, 0)
+                set(Calendar.MINUTE, checkMinute)
                 set(Calendar.SECOND, 0)
                 set(Calendar.MILLISECOND, 0)
                 if (before(now)) {

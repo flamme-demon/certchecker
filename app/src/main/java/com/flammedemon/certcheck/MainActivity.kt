@@ -1,4 +1,4 @@
-package de.guenthers.certcheck
+package com.flammedemon.certcheck
 
 import android.Manifest
 import android.content.Intent
@@ -30,14 +30,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import de.guenthers.certcheck.model.CertCheckResult
-import de.guenthers.certcheck.model.CheckStatus
-import de.guenthers.certcheck.ui.screens.DashboardContent
-import de.guenthers.certcheck.ui.screens.FavoritesContent
-import de.guenthers.certcheck.ui.screens.HistoryContent
-import de.guenthers.certcheck.ui.screens.ResultContent
-import de.guenthers.certcheck.ui.screens.SettingsContent
-import de.guenthers.certcheck.ui.theme.CertCheckTheme
+import com.flammedemon.certcheck.model.CertCheckResult
+import com.flammedemon.certcheck.model.CheckStatus
+import com.flammedemon.certcheck.ui.screens.DashboardContent
+import com.flammedemon.certcheck.ui.screens.FavoritesContent
+import com.flammedemon.certcheck.ui.screens.HistoryContent
+import com.flammedemon.certcheck.ui.screens.ResultContent
+import com.flammedemon.certcheck.ui.screens.SettingsContent
+import com.flammedemon.certcheck.ui.theme.CertCheckTheme
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -78,6 +78,7 @@ fun CertCheckApp(viewModel: MainViewModel = viewModel(factory = MainViewModel.Fa
     val latestChecks by viewModel.latestChecks.collectAsState()
 
     val checkHour by viewModel.preferences.checkHour.collectAsState()
+    val checkMinute by viewModel.preferences.checkMinute.collectAsState()
     val alertThresholdDays by viewModel.preferences.alertThresholdDays.collectAsState()
     val notificationsEnabled by viewModel.preferences.notificationsEnabled.collectAsState()
     val widgetColor by viewModel.preferences.widgetColor.collectAsState()
@@ -217,9 +218,10 @@ fun CertCheckApp(viewModel: MainViewModel = viewModel(factory = MainViewModel.Fa
         if (showSettings) {
             SettingsContent(
                 checkHour = checkHour,
+                checkMinute = checkMinute,
                 alertThresholdDays = alertThresholdDays,
                 notificationsEnabled = notificationsEnabled,
-                onCheckHourChanged = viewModel::updateCheckHour,
+                onCheckTimeChanged = viewModel::updateCheckTime,
                 onAlertThresholdChanged = viewModel::updateAlertThreshold,
                 onNotificationsToggled = viewModel::updateNotificationsEnabled,
                 widgetColor = widgetColor,
@@ -296,9 +298,9 @@ private fun generateReport(result: CertCheckResult): String {
         sb.appendLine("--- Problèmes détectés (${result.issues.size}) ---")
         result.issues.forEach { issue ->
             val severity = when (issue.severity) {
-                de.guenthers.certcheck.model.IssueSeverity.CRITICAL -> "CRITIQUE"
-                de.guenthers.certcheck.model.IssueSeverity.WARNING -> "ATTENTION"
-                de.guenthers.certcheck.model.IssueSeverity.INFO -> "INFO"
+                com.flammedemon.certcheck.model.IssueSeverity.CRITICAL -> "CRITIQUE"
+                com.flammedemon.certcheck.model.IssueSeverity.WARNING -> "ATTENTION"
+                com.flammedemon.certcheck.model.IssueSeverity.INFO -> "INFO"
             }
             sb.appendLine("[$severity] ${issue.title}")
             sb.appendLine("  ${issue.description}")

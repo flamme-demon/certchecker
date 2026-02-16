@@ -126,29 +126,88 @@
             </LinearLayout>
         </LinearLayout>
 
-        <!-- Warning domains list -->
+        <!-- Separator -->
         <TextView
-            android:id="@+id/widget_warning_list"
+            android:id="@+id/widget_divider"
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="6dp"
+            android:background="#30FFFFFF"
+            android:visibility="gone" />
+
+        <!-- All OK message -->
+        <TextView
+            android:id="@+id/widget_all_ok"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:textSize="10sp"
-            android:textColor="#FFA726"
-            android:maxLines="3"
-            android:ellipsize="end"
+            android:text="\u2714 Tous les certificats sont valides"
+            android:textSize="11sp"
+            android:textColor="#66BB6A"
+            android:gravity="center"
             android:visibility="gone" />
 
-        <!-- Error domains list -->
-        <TextView
-            android:id="@+id/widget_error_list"
+        <!-- Warning section -->
+        <LinearLayout
+            android:id="@+id/widget_warning_section"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:textSize="10sp"
-            android:textColor="#EF5350"
-            android:maxLines="3"
-            android:ellipsize="end"
-            android:visibility="gone" />
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/widget_warning_header"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="\u26A0 Attention"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:textColor="#FFA726" />
+
+            <TextView
+                android:id="@+id/widget_warning_list"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:layout_marginStart="8dp"
+                android:textSize="10sp"
+                android:textColor="#FFCC80"
+                android:maxLines="5"
+                android:ellipsize="end"
+                android:lineSpacingExtra="2dp" />
+        </LinearLayout>
+
+        <!-- Error section -->
+        <LinearLayout
+            android:id="@+id/widget_error_section"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginTop="4dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/widget_error_header"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="\u2716 Erreurs"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:textColor="#EF5350" />
+
+            <TextView
+                android:id="@+id/widget_error_list"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:layout_marginStart="8dp"
+                android:textSize="10sp"
+                android:textColor="#EF9A9A"
+                android:maxLines="5"
+                android:ellipsize="end"
+                android:lineSpacingExtra="2dp" />
+        </LinearLayout>
 
     </LinearLayout>
 </FrameLayout>

@@ -1,6 +1,6 @@
-package de.guenthers.certcheck.network
+package com.flammedemon.certcheck.network
 
-import de.guenthers.certcheck.model.*
+import com.flammedemon.certcheck.model.*
 import java.net.InetSocketAddress
 import java.security.MessageDigest
 import java.security.cert.CertPathValidator

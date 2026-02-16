@@ -1,4 +1,4 @@
-package de.guenthers.certcheck.model
+package com.flammedemon.certcheck.model
 
 import java.security.cert.X509Certificate
 import java.util.Date

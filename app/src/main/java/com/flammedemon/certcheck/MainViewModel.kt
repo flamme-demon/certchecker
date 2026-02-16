@@ -1,4 +1,4 @@
-package de.guenthers.certcheck
+package com.flammedemon.certcheck
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
@@ -6,14 +6,14 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import de.guenthers.certcheck.database.CertCheckDatabase
-import de.guenthers.certcheck.database.CertCheckRepository
-import de.guenthers.certcheck.database.CheckHistoryEntity
-import de.guenthers.certcheck.database.FavoriteEntity
-import de.guenthers.certcheck.model.CertCheckResult
-import de.guenthers.certcheck.network.SSLChecker
-import de.guenthers.certcheck.widget.CertCheckWidgetProvider
-import de.guenthers.certcheck.worker.DailyCertificateCheckWorker
+import com.flammedemon.certcheck.database.CertCheckDatabase
+import com.flammedemon.certcheck.database.CertCheckRepository
+import com.flammedemon.certcheck.database.CheckHistoryEntity
+import com.flammedemon.certcheck.database.FavoriteEntity
+import com.flammedemon.certcheck.model.CertCheckResult
+import com.flammedemon.certcheck.network.SSLChecker
+import com.flammedemon.certcheck.widget.CertCheckWidgetProvider
+import com.flammedemon.certcheck.worker.DailyCertificateCheckWorker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -52,7 +52,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     init {
-        DailyCertificateCheckWorker.schedule(application, preferences.checkHour.value)
+        DailyCertificateCheckWorker.schedule(application, preferences.checkHour.value, preferences.checkMinute.value)
         refreshAllFavorites()
     }
 
@@ -175,9 +175,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         checkIfFavorite()
     }
 
-    fun updateCheckHour(hour: Int) {
+    fun updateCheckTime(hour: Int, minute: Int) {
         preferences.setCheckHour(hour)
-        DailyCertificateCheckWorker.schedule(getApplication(), hour)
+        preferences.setCheckMinute(minute)
+        DailyCertificateCheckWorker.schedule(getApplication(), hour, minute)
     }
 
     fun updateAlertThreshold(days: Int) {

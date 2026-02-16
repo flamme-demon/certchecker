@@ -1,7 +1,7 @@
-package de.guenthers.certcheck.database
+package com.flammedemon.certcheck.database
 
-import de.guenthers.certcheck.model.CertCheckResult
-import de.guenthers.certcheck.network.SSLChecker
+import com.flammedemon.certcheck.model.CertCheckResult
+import com.flammedemon.certcheck.network.SSLChecker
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 
@@ -79,10 +79,6 @@ class CertCheckRepository(private val database: CertCheckDatabase) {
 
         if (previous.certificateFingerprint != current.certificateFingerprint) {
             changes.add("Certificate fingerprint changed")
-        }
-
-        if (previous.daysUntilExpiry != current.daysUntilExpiry) {
-            changes.add("Days until expiry changed: ${previous.daysUntilExpiry} -> ${current.daysUntilExpiry}")
         }
 
         return if (changes.isNotEmpty()) {

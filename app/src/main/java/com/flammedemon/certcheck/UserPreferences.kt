@@ -1,4 +1,4 @@
-package de.guenthers.certcheck
+package com.flammedemon.certcheck
 
 import android.content.Context
 import android.content.SharedPreferences
@@ -13,6 +13,9 @@ class UserPreferences(context: Context) {
 
     private val _checkHour = MutableStateFlow(prefs.getInt(KEY_CHECK_HOUR, DEFAULT_CHECK_HOUR))
     val checkHour: StateFlow<Int> = _checkHour.asStateFlow()
+
+    private val _checkMinute = MutableStateFlow(prefs.getInt(KEY_CHECK_MINUTE, DEFAULT_CHECK_MINUTE))
+    val checkMinute: StateFlow<Int> = _checkMinute.asStateFlow()
 
     private val _alertThresholdDays = MutableStateFlow(prefs.getInt(KEY_ALERT_THRESHOLD, DEFAULT_ALERT_THRESHOLD))
     val alertThresholdDays: StateFlow<Int> = _alertThresholdDays.asStateFlow()
@@ -29,6 +32,11 @@ class UserPreferences(context: Context) {
     fun setCheckHour(hour: Int) {
         prefs.edit().putInt(KEY_CHECK_HOUR, hour).apply()
         _checkHour.value = hour
+    }
+
+    fun setCheckMinute(minute: Int) {
+        prefs.edit().putInt(KEY_CHECK_MINUTE, minute).apply()
+        _checkMinute.value = minute
     }
 
     fun setAlertThresholdDays(days: Int) {
@@ -54,12 +62,14 @@ class UserPreferences(context: Context) {
     companion object {
         private const val PREFS_NAME = "certcheck_settings"
         private const val KEY_CHECK_HOUR = "check_hour"
+        private const val KEY_CHECK_MINUTE = "check_minute"
         private const val KEY_ALERT_THRESHOLD = "alert_threshold_days"
         private const val KEY_NOTIFICATIONS_ENABLED = "notifications_enabled"
         private const val KEY_WIDGET_COLOR = "widget_color"
         private const val KEY_WIDGET_OPACITY = "widget_opacity"
 
         const val DEFAULT_CHECK_HOUR = 3
+        const val DEFAULT_CHECK_MINUTE = 0
         const val DEFAULT_ALERT_THRESHOLD = 30
         const val DEFAULT_WIDGET_COLOR = 0x000000 // Black (without alpha)
         const val DEFAULT_WIDGET_OPACITY = 85 // 85%

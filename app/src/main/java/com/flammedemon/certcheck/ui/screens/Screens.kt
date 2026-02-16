@@ -1,4 +1,4 @@
-package de.guenthers.certcheck.ui.screens
+package com.flammedemon.certcheck.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -28,12 +28,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import de.guenthers.certcheck.MainUiState
-import de.guenthers.certcheck.database.CheckHistoryEntity
-import de.guenthers.certcheck.database.FavoriteEntity
-import de.guenthers.certcheck.model.*
-import de.guenthers.certcheck.ui.components.*
-import de.guenthers.certcheck.ui.theme.*
+import com.flammedemon.certcheck.MainUiState
+import com.flammedemon.certcheck.database.CheckHistoryEntity
+import com.flammedemon.certcheck.database.FavoriteEntity
+import com.flammedemon.certcheck.model.*
+import com.flammedemon.certcheck.ui.components.*
+import com.flammedemon.certcheck.ui.theme.*
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.*
@@ -693,9 +693,10 @@ private fun FavoriteItem(
 @Composable
 fun SettingsContent(
     checkHour: Int,
+    checkMinute: Int,
     alertThresholdDays: Int,
     notificationsEnabled: Boolean,
-    onCheckHourChanged: (Int) -> Unit,
+    onCheckTimeChanged: (Int, Int) -> Unit,
     onAlertThresholdChanged: (Int) -> Unit,
     onNotificationsToggled: (Boolean) -> Unit,
     widgetColor: Int,
@@ -791,7 +792,7 @@ fun SettingsContent(
                                 modifier = Modifier.size(18.dp),
                             )
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text(String.format(Locale.getDefault(), "%02d:00", checkHour))
+                            Text(String.format(Locale.getDefault(), "%02d:%02d", checkHour, checkMinute))
                         }
                     }
                 }
@@ -1063,8 +1064,9 @@ fun SettingsContent(
     if (showTimePicker) {
         TimePickerDialog(
             currentHour = checkHour,
-            onHourSelected = { hour ->
-                onCheckHourChanged(hour)
+            currentMinute = checkMinute,
+            onTimeSelected = { hour, minute ->
+                onCheckTimeChanged(hour, minute)
                 showTimePicker = false
             },
             onDismiss = { showTimePicker = false },
@@ -1076,12 +1078,13 @@ fun SettingsContent(
 @Composable
 private fun TimePickerDialog(
     currentHour: Int,
-    onHourSelected: (Int) -> Unit,
+    currentMinute: Int,
+    onTimeSelected: (Int, Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val timePickerState = rememberTimePickerState(
         initialHour = currentHour,
-        initialMinute = 0,
+        initialMinute = currentMinute,
         is24Hour = true,
     )
 
@@ -1097,7 +1100,7 @@ private fun TimePickerDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { onHourSelected(timePickerState.hour) }) {
+            TextButton(onClick = { onTimeSelected(timePickerState.hour, timePickerState.minute) }) {
                 Text("Confirmer")
             }
         },
