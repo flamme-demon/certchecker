@@ -1,7 +1,7 @@
-package de.guenthers.certcheck.database
+package com.flammedemon.certcheck.database
 
-import de.guenthers.certcheck.model.CertCheckResult
-import de.guenthers.certcheck.network.SSLChecker
+import com.flammedemon.certcheck.model.CertCheckResult
+import com.flammedemon.certcheck.network.SSLChecker
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 

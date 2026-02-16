@@ -1,4 +1,4 @@
-package de.guenthers.certcheck.database
+package com.flammedemon.certcheck.database
 
 import androidx.room.*
 import kotlinx.coroutines.flow.Flow

@@ -1,4 +1,4 @@
-package de.guenthers.certcheck.widget
+package com.flammedemon.certcheck.widget
 
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
@@ -9,11 +9,11 @@ import android.content.Intent
 import android.graphics.PorterDuff
 import android.view.View
 import android.widget.RemoteViews
-import de.guenthers.certcheck.MainActivity
-import de.guenthers.certcheck.R
-import de.guenthers.certcheck.UserPreferences
-import de.guenthers.certcheck.database.CertCheckDatabase
-import de.guenthers.certcheck.database.CheckHistoryEntity
+import com.flammedemon.certcheck.MainActivity
+import com.flammedemon.certcheck.R
+import com.flammedemon.certcheck.UserPreferences
+import com.flammedemon.certcheck.database.CertCheckDatabase
+import com.flammedemon.certcheck.database.CheckHistoryEntity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob

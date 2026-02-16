@@ -1,4 +1,4 @@
-package de.guenthers.certcheck.worker
+package com.flammedemon.certcheck.worker
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -8,12 +8,12 @@ import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.work.*
-import de.guenthers.certcheck.MainActivity
-import de.guenthers.certcheck.R
-import de.guenthers.certcheck.UserPreferences
-import de.guenthers.certcheck.database.CertCheckDatabase
-import de.guenthers.certcheck.database.CertCheckRepository
-import de.guenthers.certcheck.widget.CertCheckWidgetProvider
+import com.flammedemon.certcheck.MainActivity
+import com.flammedemon.certcheck.R
+import com.flammedemon.certcheck.UserPreferences
+import com.flammedemon.certcheck.database.CertCheckDatabase
+import com.flammedemon.certcheck.database.CertCheckRepository
+import com.flammedemon.certcheck.widget.CertCheckWidgetProvider
 import kotlinx.coroutines.flow.first
 import java.util.Calendar
 import java.util.concurrent.TimeUnit

@@ -1,4 +1,4 @@
-package de.guenthers.certcheck
+package com.flammedemon.certcheck
 
 import android.content.Context
 import android.content.SharedPreferences

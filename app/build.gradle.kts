@@ -6,11 +6,11 @@ plugins {
 }
 
 android {
-    namespace = "de.guenthers.certcheck"
+    namespace = "com.flammedemon.certcheck"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "de.guenthers.certcheck"
+        applicationId = "com.flammedemon.certcheck"
         minSdk = 26
         targetSdk = 35
         versionCode = 1

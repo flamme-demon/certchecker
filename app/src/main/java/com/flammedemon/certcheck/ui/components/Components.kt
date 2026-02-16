@@ -1,4 +1,4 @@
-package de.guenthers.certcheck.ui.components
+package com.flammedemon.certcheck.ui.components
 
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
@@ -20,8 +20,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import de.guenthers.certcheck.model.*
-import de.guenthers.certcheck.ui.theme.*
+import com.flammedemon.certcheck.model.*
+import com.flammedemon.certcheck.ui.theme.*
 import java.text.SimpleDateFormat
 import java.util.*
 

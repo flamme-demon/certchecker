@@ -1,4 +1,4 @@
-package de.guenthers.certcheck
+package com.flammedemon.certcheck
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
@@ -6,14 +6,14 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import de.guenthers.certcheck.database.CertCheckDatabase
-import de.guenthers.certcheck.database.CertCheckRepository
-import de.guenthers.certcheck.database.CheckHistoryEntity
-import de.guenthers.certcheck.database.FavoriteEntity
-import de.guenthers.certcheck.model.CertCheckResult
-import de.guenthers.certcheck.network.SSLChecker
-import de.guenthers.certcheck.widget.CertCheckWidgetProvider
-import de.guenthers.certcheck.worker.DailyCertificateCheckWorker
+import com.flammedemon.certcheck.database.CertCheckDatabase
+import com.flammedemon.certcheck.database.CertCheckRepository
+import com.flammedemon.certcheck.database.CheckHistoryEntity
+import com.flammedemon.certcheck.database.FavoriteEntity
+import com.flammedemon.certcheck.model.CertCheckResult
+import com.flammedemon.certcheck.network.SSLChecker
+import com.flammedemon.certcheck.widget.CertCheckWidgetProvider
+import com.flammedemon.certcheck.worker.DailyCertificateCheckWorker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
