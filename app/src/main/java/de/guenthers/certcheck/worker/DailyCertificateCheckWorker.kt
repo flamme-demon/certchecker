@@ -154,7 +154,7 @@ class DailyCertificateCheckWorker(
         const val CHANGE_ALERT_CHANNEL_ID = "change_alerts"
         const val ERROR_ALERT_CHANNEL_ID = "error_alerts"
 
-        fun schedule(context: Context, checkHour: Int = UserPreferences.DEFAULT_CHECK_HOUR) {
+        fun schedule(context: Context, checkHour: Int = UserPreferences.DEFAULT_CHECK_HOUR, checkMinute: Int = UserPreferences.DEFAULT_CHECK_MINUTE) {
             val constraints = Constraints.Builder()
                 .setRequiredNetworkType(NetworkType.CONNECTED)
                 .build()
@@ -162,7 +162,7 @@ class DailyCertificateCheckWorker(
             val now = Calendar.getInstance()
             val target = Calendar.getInstance().apply {
                 set(Calendar.HOUR_OF_DAY, checkHour)
-                set(Calendar.MINUTE, 0)
+                set(Calendar.MINUTE, checkMinute)
                 set(Calendar.SECOND, 0)
                 set(Calendar.MILLISECOND, 0)
                 if (before(now)) {

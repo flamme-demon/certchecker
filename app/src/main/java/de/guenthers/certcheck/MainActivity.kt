@@ -78,6 +78,7 @@ fun CertCheckApp(viewModel: MainViewModel = viewModel(factory = MainViewModel.Fa
     val latestChecks by viewModel.latestChecks.collectAsState()
 
     val checkHour by viewModel.preferences.checkHour.collectAsState()
+    val checkMinute by viewModel.preferences.checkMinute.collectAsState()
     val alertThresholdDays by viewModel.preferences.alertThresholdDays.collectAsState()
     val notificationsEnabled by viewModel.preferences.notificationsEnabled.collectAsState()
     val widgetColor by viewModel.preferences.widgetColor.collectAsState()
@@ -217,9 +218,10 @@ fun CertCheckApp(viewModel: MainViewModel = viewModel(factory = MainViewModel.Fa
         if (showSettings) {
             SettingsContent(
                 checkHour = checkHour,
+                checkMinute = checkMinute,
                 alertThresholdDays = alertThresholdDays,
                 notificationsEnabled = notificationsEnabled,
-                onCheckHourChanged = viewModel::updateCheckHour,
+                onCheckTimeChanged = viewModel::updateCheckTime,
                 onAlertThresholdChanged = viewModel::updateAlertThreshold,
                 onNotificationsToggled = viewModel::updateNotificationsEnabled,
                 widgetColor = widgetColor,

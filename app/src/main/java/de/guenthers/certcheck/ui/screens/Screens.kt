@@ -693,9 +693,10 @@ private fun FavoriteItem(
 @Composable
 fun SettingsContent(
     checkHour: Int,
+    checkMinute: Int,
     alertThresholdDays: Int,
     notificationsEnabled: Boolean,
-    onCheckHourChanged: (Int) -> Unit,
+    onCheckTimeChanged: (Int, Int) -> Unit,
     onAlertThresholdChanged: (Int) -> Unit,
     onNotificationsToggled: (Boolean) -> Unit,
     widgetColor: Int,
@@ -791,7 +792,7 @@ fun SettingsContent(
                                 modifier = Modifier.size(18.dp),
                             )
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text(String.format(Locale.getDefault(), "%02d:00", checkHour))
+                            Text(String.format(Locale.getDefault(), "%02d:%02d", checkHour, checkMinute))
                         }
                     }
                 }
@@ -1063,8 +1064,9 @@ fun SettingsContent(
     if (showTimePicker) {
         TimePickerDialog(
             currentHour = checkHour,
-            onHourSelected = { hour ->
-                onCheckHourChanged(hour)
+            currentMinute = checkMinute,
+            onTimeSelected = { hour, minute ->
+                onCheckTimeChanged(hour, minute)
                 showTimePicker = false
             },
             onDismiss = { showTimePicker = false },
@@ -1076,12 +1078,13 @@ fun SettingsContent(
 @Composable
 private fun TimePickerDialog(
     currentHour: Int,
-    onHourSelected: (Int) -> Unit,
+    currentMinute: Int,
+    onTimeSelected: (Int, Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val timePickerState = rememberTimePickerState(
         initialHour = currentHour,
-        initialMinute = 0,
+        initialMinute = currentMinute,
         is24Hour = true,
     )
 
@@ -1097,7 +1100,7 @@ private fun TimePickerDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { onHourSelected(timePickerState.hour) }) {
+            TextButton(onClick = { onTimeSelected(timePickerState.hour, timePickerState.minute) }) {
                 Text("Confirmer")
             }
         },

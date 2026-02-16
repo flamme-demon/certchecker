@@ -52,7 +52,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     init {
-        DailyCertificateCheckWorker.schedule(application, preferences.checkHour.value)
+        DailyCertificateCheckWorker.schedule(application, preferences.checkHour.value, preferences.checkMinute.value)
         refreshAllFavorites()
     }
 
@@ -175,9 +175,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         checkIfFavorite()
     }
 
-    fun updateCheckHour(hour: Int) {
+    fun updateCheckTime(hour: Int, minute: Int) {
         preferences.setCheckHour(hour)
-        DailyCertificateCheckWorker.schedule(getApplication(), hour)
+        preferences.setCheckMinute(minute)
+        DailyCertificateCheckWorker.schedule(getApplication(), hour, minute)
     }
 
     fun updateAlertThreshold(days: Int) {
