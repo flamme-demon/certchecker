@@ -261,6 +261,9 @@ fun CertCheckApp(viewModel: MainViewModel = viewModel(factory = MainViewModel.Fa
                     onFavoriteDelete = viewModel::removeFavorite,
                     onFavoriteRefresh = viewModel::refreshFavorite,
                     onFavoriteToggleNotifications = viewModel::toggleFavoriteNotifications,
+                    refreshingFavoriteIds = uiState.refreshingFavoriteIds,
+                    isRefreshingAll = uiState.isRefreshingFavorites,
+                    onRefreshAll = viewModel::refreshAllFavorites,
                     modifier = Modifier.padding(padding),
                 )
             }

@@ -40,6 +40,8 @@ class DailyCertificateCheckWorker(
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         createNotificationChannel(notificationManager)
 
+        val notifiedStatuses = context.getSharedPreferences(NOTIFIED_STATUS_PREFS, Context.MODE_PRIVATE)
+
         for (favorite in favorites) {
             try {
                 val history = repository.checkAndSaveResult(favorite.id)
@@ -47,6 +49,8 @@ class DailyCertificateCheckWorker(
 
                 // Skip notifications if globally disabled or disabled for this favorite
                 if (!notificationsEnabled || !favorite.notificationsEnabled) continue
+
+                var expiryNotified = false
 
                 // Notification 1: Certificate expires within the configured threshold
                 if (history.daysUntilExpiry != null && history.daysUntilExpiry <= alertThreshold) {
@@ -57,17 +61,32 @@ class DailyCertificateCheckWorker(
                         "Certificat expire bientôt",
                         "${favorite.hostname}:${favorite.port} expire dans ${history.daysUntilExpiry} jours"
                     )
+                    expiryNotified = true
                 }
 
-                // Notification 2: Status changed from valid (OK) to any other state
-                if (changes != null && changes.previousStatus == "OK" && changes.newStatus != "OK") {
+                // Notification 2: Certificate has non-OK status (first detection or status changed)
+                // Uses SharedPreferences to track last notified status per favorite to avoid daily spam
+                val lastNotifiedStatus = notifiedStatuses.getString("status_${favorite.id}", null)
+                if (!expiryNotified && history.overallStatus != "OK" && history.error == null
+                    && history.overallStatus != lastNotifiedStatus
+                ) {
+                    val message = if (changes != null && changes.changes.isNotEmpty()) {
+                        "${favorite.hostname}: ${changes.changes.joinToString(", ")}"
+                    } else {
+                        "${favorite.hostname}:${favorite.port} - statut: ${history.overallStatus}"
+                    }
                     showNotification(
                         notificationManager,
                         CHANGE_ALERT_CHANNEL_ID,
                         favorite.id.toInt() + 1000,
                         "Certificat invalide",
-                        "${favorite.hostname}: ${changes.changes.joinToString(", ")}"
+                        message
                     )
+                    notifiedStatuses.edit().putString("status_${favorite.id}", history.overallStatus).apply()
+                } else if (history.overallStatus == "OK" && lastNotifiedStatus != null) {
+                    // Status recovered to OK: clear tracked state and dismiss notification
+                    notifiedStatuses.edit().remove("status_${favorite.id}").apply()
+                    notificationManager.cancel(favorite.id.toInt() + 1000)
                 }
 
                 // Notification 3: Connection error
@@ -153,8 +172,17 @@ class DailyCertificateCheckWorker(
         const val EXPIRY_ALERT_CHANNEL_ID = "expiry_alerts"
         const val CHANGE_ALERT_CHANNEL_ID = "change_alerts"
         const val ERROR_ALERT_CHANNEL_ID = "error_alerts"
+        private const val NOTIFIED_STATUS_PREFS = "worker_notified_statuses"
 
         fun schedule(context: Context, checkHour: Int = UserPreferences.DEFAULT_CHECK_HOUR, checkMinute: Int = UserPreferences.DEFAULT_CHECK_MINUTE) {
+            enqueueWork(context, checkHour, checkMinute, ExistingPeriodicWorkPolicy.KEEP)
+        }
+
+        fun reschedule(context: Context, checkHour: Int, checkMinute: Int) {
+            enqueueWork(context, checkHour, checkMinute, ExistingPeriodicWorkPolicy.REPLACE)
+        }
+
+        private fun enqueueWork(context: Context, checkHour: Int, checkMinute: Int, policy: ExistingPeriodicWorkPolicy) {
             val constraints = Constraints.Builder()
                 .setRequiredNetworkType(NetworkType.CONNECTED)
                 .build()
@@ -181,7 +209,7 @@ class DailyCertificateCheckWorker(
 
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(
                 WORK_NAME,
-                ExistingPeriodicWorkPolicy.REPLACE,
+                policy,
                 workRequest
             )
         }
