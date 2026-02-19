@@ -297,6 +297,33 @@ private fun generateReport(result: CertCheckResult): String {
         sb.appendLine()
     }
 
+    if (result.cipherAnalysis != null) {
+        val ca = result.cipherAnalysis
+        val strengthLabel = when (ca.strength) {
+            com.flammedemon.certcheck.model.CipherStrength.STRONG -> "FORT"
+            com.flammedemon.certcheck.model.CipherStrength.ACCEPTABLE -> "ACCEPTABLE"
+            com.flammedemon.certcheck.model.CipherStrength.WEAK -> "FAIBLE"
+        }
+        sb.appendLine("--- Analyse Cipher Suite ---")
+        sb.appendLine("Cipher      : ${ca.fullName}")
+        sb.appendLine("Force       : $strengthLabel")
+        sb.appendLine("Échange clés: ${ca.keyExchange}")
+        sb.appendLine("Chiffrement : ${ca.encryption}")
+        sb.appendLine("MAC / Hash  : ${ca.mac}")
+        sb.appendLine("Forward Sec.: ${if (ca.hasForwardSecrecy) "Oui" else "Non"}")
+        sb.appendLine("AEAD        : ${if (ca.isAead) "Oui" else "Non"}")
+        sb.appendLine("TLS 1.3     : ${if (ca.isTls13) "Oui" else "Non"}")
+        if (ca.compatibility.isNotEmpty()) {
+            sb.appendLine()
+            sb.appendLine("Compatibilité :")
+            ca.compatibility.forEach { compat ->
+                val mark = if (compat.supported) "✓" else "✗"
+                sb.appendLine("  $mark ${compat.platform} — ${compat.detail}")
+            }
+        }
+        sb.appendLine()
+    }
+
     if (result.issues.isNotEmpty()) {
         sb.appendLine("--- Problèmes détectés (${result.issues.size}) ---")
         result.issues.forEach { issue ->

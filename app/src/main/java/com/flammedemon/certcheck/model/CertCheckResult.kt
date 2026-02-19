@@ -12,6 +12,7 @@ data class CertCheckResult(
     val timestamp: Date = Date(),
     val tlsVersion: String? = null,
     val cipherSuite: String? = null,
+    val cipherAnalysis: CipherAnalysis? = null,
     val certificates: List<CertificateInfo> = emptyList(),
     val chainValid: Boolean = false,
     val trustedByAndroid: Boolean = false,
@@ -91,6 +92,8 @@ enum class IssueType {
     NO_SANS,
     CHAIN_TOO_LONG,
     ANDROID_SPECIFIC_TRUST_ISSUE,
+    CIPHER_WEAK,
+    CIPHER_NO_FORWARD_SECRECY,
 }
 
 enum class IssueSeverity {
@@ -105,3 +108,30 @@ enum class CheckStatus {
     CRITICAL,
     ERROR,
 }
+
+/**
+ * Analyse détaillée du cipher suite négocié.
+ */
+data class CipherAnalysis(
+    val fullName: String,
+    val keyExchange: String,
+    val encryption: String,
+    val mac: String,
+    val strength: CipherStrength,
+    val hasForwardSecrecy: Boolean,
+    val isTls13: Boolean,
+    val isAead: Boolean,
+    val compatibility: List<CipherCompatibility>,
+)
+
+enum class CipherStrength {
+    STRONG,
+    ACCEPTABLE,
+    WEAK,
+}
+
+data class CipherCompatibility(
+    val platform: String,
+    val supported: Boolean,
+    val detail: String,
+)

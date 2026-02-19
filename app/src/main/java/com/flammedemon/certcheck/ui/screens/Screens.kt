@@ -1195,6 +1195,21 @@ fun ResultContent(
             }
         }
 
+        // Analyse cipher suite
+        if (result.cipherAnalysis != null) {
+            item {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Analyse Cipher Suite",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+            item {
+                CipherAnalysisCard(analysis = result.cipherAnalysis)
+            }
+        }
+
         // Problèmes détectés
         if (result.issues.isNotEmpty()) {
             item {

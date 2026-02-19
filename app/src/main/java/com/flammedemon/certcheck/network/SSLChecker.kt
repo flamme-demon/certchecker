@@ -177,11 +177,15 @@ object SSLChecker {
         checkTlsVersion(tlsVersion, issues)
         checkChainLength(serverCerts, issues)
 
+        // --- Étape 7 : Analyse du cipher suite ---
+        val cipherAnalysis = cipherSuite?.let { analyzeCipherSuite(it, tlsVersion, issues) }
+
         return CertCheckResult(
             hostname = hostname,
             port = port,
             tlsVersion = tlsVersion,
             cipherSuite = cipherSuite,
+            cipherAnalysis = cipherAnalysis,
             certificates = certInfos,
             chainValid = chainValid,
             trustedByAndroid = trustedByAndroid,
@@ -531,6 +535,267 @@ object SSLChecker {
                 .digest(encoded)
                 .joinToString(":") { "%02X".format(it) },
         )
+    }
+
+    // ========================================================================
+    // Analyse du cipher suite
+    // ========================================================================
+
+    /**
+     * Analyse le cipher suite négocié et évalue sa force, sa compatibilité
+     * multi-plateforme, et signale les problèmes potentiels.
+     */
+    private fun analyzeCipherSuite(
+        cipher: String,
+        tlsVersion: String?,
+        issues: MutableList<CertIssue>
+    ): CipherAnalysis {
+        val isTls13 = tlsVersion == "TLSv1.3" || cipher.startsWith("TLS_") && !cipher.contains("WITH")
+        val parsed = parseCipherComponents(cipher, isTls13)
+        val strength = evaluateCipherStrength(parsed)
+        val hasFs = parsed.keyExchange in listOf("ECDHE", "DHE", "N/A (TLS 1.3)")
+        val isAead = parsed.encryption.contains("GCM") ||
+                parsed.encryption.contains("CCM") ||
+                parsed.encryption.contains("CHACHA20") ||
+                parsed.encryption.contains("POLY1305")
+
+        // Vérifier la force
+        if (strength == CipherStrength.WEAK) {
+            issues.add(
+                CertIssue(
+                    type = IssueType.CIPHER_WEAK,
+                    severity = IssueSeverity.WARNING,
+                    title = "Cipher suite faible",
+                    description = "Le cipher '$cipher' utilise des algorithmes considérés " +
+                            "comme faibles. Un cipher plus moderne (AES-GCM, ChaCha20) est recommandé."
+                )
+            )
+        }
+
+        // Vérifier forward secrecy
+        if (!hasFs && !isTls13) {
+            issues.add(
+                CertIssue(
+                    type = IssueType.CIPHER_NO_FORWARD_SECRECY,
+                    severity = IssueSeverity.WARNING,
+                    title = "Pas de Forward Secrecy",
+                    description = "Le cipher '$cipher' n'utilise pas ECDHE ou DHE. " +
+                            "Sans Forward Secrecy, si la clé privée du serveur est compromise, " +
+                            "tout le trafic passé peut être déchiffré."
+                )
+            )
+        }
+
+        val compatibility = evaluateCompatibility(cipher, isTls13, parsed)
+
+        return CipherAnalysis(
+            fullName = cipher,
+            keyExchange = parsed.keyExchange,
+            encryption = parsed.encryption,
+            mac = parsed.mac,
+            strength = strength,
+            hasForwardSecrecy = hasFs,
+            isTls13 = isTls13,
+            isAead = isAead,
+            compatibility = compatibility,
+        )
+    }
+
+    private data class CipherComponents(
+        val keyExchange: String,
+        val encryption: String,
+        val mac: String,
+    )
+
+    /**
+     * Parse un cipher suite IANA (format Java/Android) en ses composants.
+     *
+     * TLS 1.3 : TLS_AES_256_GCM_SHA384
+     * TLS 1.2 : TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+     */
+    private fun parseCipherComponents(cipher: String, isTls13: Boolean): CipherComponents {
+        if (isTls13) {
+            // TLS 1.3 ciphers : TLS_<encryption>_<mac>
+            // Ex: TLS_AES_256_GCM_SHA384, TLS_CHACHA20_POLY1305_SHA256, TLS_AES_128_GCM_SHA256
+            val parts = cipher.removePrefix("TLS_")
+            val mac = when {
+                parts.endsWith("SHA384") -> "SHA384"
+                parts.endsWith("SHA256") -> "SHA256"
+                else -> parts.substringAfterLast("_")
+            }
+            val enc = parts.removeSuffix("_$mac")
+            return CipherComponents(
+                keyExchange = "N/A (TLS 1.3)",
+                encryption = enc.replace("_", "-"),
+                mac = mac,
+            )
+        }
+
+        // TLS 1.2 et antérieur : TLS_<KX>_WITH_<ENC>_<MAC>
+        val withIndex = cipher.indexOf("_WITH_")
+        if (withIndex > 0) {
+            val kxPart = cipher.substring(4, withIndex) // skip "TLS_"
+            val rest = cipher.substring(withIndex + 6) // skip "_WITH_"
+
+            val kx = when {
+                kxPart.startsWith("ECDHE") -> "ECDHE"
+                kxPart.startsWith("DHE") -> "DHE"
+                kxPart.startsWith("RSA") -> "RSA"
+                kxPart.startsWith("ECDH_") -> "ECDH"
+                kxPart.startsWith("DH_") -> "DH"
+                else -> kxPart.substringBefore("_")
+            }
+
+            // MAC est le dernier segment : SHA256, SHA384, SHA, MD5
+            val mac = when {
+                rest.endsWith("SHA384") -> "SHA384"
+                rest.endsWith("SHA256") -> "SHA256"
+                rest.endsWith("SHA") -> "SHA"
+                rest.endsWith("MD5") -> "MD5"
+                else -> rest.substringAfterLast("_")
+            }
+
+            val enc = rest.removeSuffix("_$mac")
+
+            return CipherComponents(
+                keyExchange = kx,
+                encryption = enc.replace("_", "-"),
+                mac = mac,
+            )
+        }
+
+        // Fallback pour formats non standard
+        return CipherComponents(
+            keyExchange = "Inconnu",
+            encryption = cipher,
+            mac = "Inconnu",
+        )
+    }
+
+    private fun evaluateCipherStrength(parsed: CipherComponents): CipherStrength {
+        val enc = parsed.encryption.uppercase()
+        val mac = parsed.mac.uppercase()
+
+        // Faible : RC4, DES, 3DES, export, NULL, MD5
+        if (enc.contains("RC4") || enc.contains("DES") || enc.contains("3DES") ||
+            enc.contains("NULL") || enc.contains("EXPORT") || mac == "MD5") {
+            return CipherStrength.WEAK
+        }
+
+        // Fort : AES-GCM, AES-CCM, ChaCha20-Poly1305
+        if (enc.contains("GCM") || enc.contains("CCM") ||
+            enc.contains("CHACHA20") || enc.contains("POLY1305")) {
+            return CipherStrength.STRONG
+        }
+
+        // Acceptable : AES-CBC avec SHA256+
+        return CipherStrength.ACCEPTABLE
+    }
+
+    /**
+     * Évalue la compatibilité du cipher suite avec les principales plateformes.
+     */
+    private fun evaluateCompatibility(
+        cipher: String,
+        isTls13: Boolean,
+        parsed: CipherComponents
+    ): List<CipherCompatibility> {
+        val compatibility = mutableListOf<CipherCompatibility>()
+
+        // --- Android ---
+        // Android 8+ (API 26+) supporte TLS 1.2 et la plupart des ciphers modernes
+        // Android 10+ (API 29+) supporte TLS 1.3
+        compatibility.add(
+            if (isTls13) {
+                CipherCompatibility(
+                    platform = "Android 10+",
+                    supported = true,
+                    detail = "TLS 1.3 supporté nativement depuis Android 10 (API 29)"
+                )
+            } else {
+                val isModernCipher = parsed.encryption.uppercase().let {
+                    it.contains("AES") || it.contains("CHACHA20")
+                }
+                CipherCompatibility(
+                    platform = "Android 8+",
+                    supported = isModernCipher,
+                    detail = if (isModernCipher) "Cipher supporté sur Android 8+ (API 26+)"
+                    else "Ce cipher peut ne pas être disponible sur certaines versions Android"
+                )
+            }
+        )
+
+        // --- iOS / Safari ---
+        // iOS 12.2+ supporte TLS 1.3
+        // iOS est strict sur les ciphers : supporte principalement ECDHE avec AES-GCM/ChaCha20
+        val enc = parsed.encryption.uppercase()
+        val kx = parsed.keyExchange.uppercase()
+        if (isTls13) {
+            compatibility.add(
+                CipherCompatibility(
+                    platform = "iOS 12.2+ / Safari",
+                    supported = true,
+                    detail = "TLS 1.3 supporté depuis iOS 12.2"
+                )
+            )
+        } else {
+            // iOS supporte ECDHE mais pas DHE depuis iOS 10+
+            val iosDheUnsupported = kx == "DHE"
+            // iOS ne supporte pas ARIA, CAMELLIA, SEED, CCM8
+            val iosUnsupportedEnc = enc.contains("ARIA") || enc.contains("CAMELLIA") ||
+                    enc.contains("SEED") || enc.contains("CCM8")
+
+            val iosSupported = !iosDheUnsupported && !iosUnsupportedEnc &&
+                    (enc.contains("AES") || enc.contains("CHACHA20"))
+
+            val detail = when {
+                iosDheUnsupported -> "iOS ne supporte pas les ciphers DHE (uniquement ECDHE). " +
+                        "Cela bloquera Safari et les apps iOS natives"
+                iosUnsupportedEnc -> "iOS ne supporte pas ${parsed.encryption}. " +
+                        "Cela bloquera Safari et les apps iOS natives"
+                !iosSupported -> "Ce cipher peut ne pas être supporté par iOS"
+                else -> "Cipher supporté sur iOS / Safari"
+            }
+
+            compatibility.add(
+                CipherCompatibility(
+                    platform = "iOS / Safari",
+                    supported = iosSupported,
+                    detail = detail,
+                )
+            )
+        }
+
+        // --- Chrome / Navigateurs modernes ---
+        val chromeSupported = isTls13 || (
+                (enc.contains("AES") || enc.contains("CHACHA20")) &&
+                (kx == "ECDHE" || kx == "DHE" || kx == "N/A (TLS 1.3)")
+        )
+        compatibility.add(
+            CipherCompatibility(
+                platform = "Chrome / Edge / Firefox",
+                supported = chromeSupported,
+                detail = if (chromeSupported) "Supporté par les navigateurs modernes"
+                else "Ce cipher peut être rejeté par les navigateurs récents"
+            )
+        )
+
+        // --- Anciens navigateurs / systèmes ---
+        val legacyNote = when {
+            isTls13 -> "Les anciens systèmes (< Windows 10, < Android 10, IE 11) ne supportent pas TLS 1.3"
+            kx == "RSA" && enc.contains("AES") -> "Compatible avec les anciens systèmes (IE 11, Java 7, etc.)"
+            kx == "ECDHE" && enc.contains("AES") -> "Compatible avec la plupart des systèmes (Java 8+, Windows 7+)"
+            else -> "Compatibilité variable selon les systèmes"
+        }
+        compatibility.add(
+            CipherCompatibility(
+                platform = "Systèmes anciens",
+                supported = !isTls13,
+                detail = legacyNote,
+            )
+        )
+
+        return compatibility
     }
 
     /**
