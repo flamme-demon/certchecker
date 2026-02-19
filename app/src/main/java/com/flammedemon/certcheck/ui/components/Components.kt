@@ -328,6 +328,189 @@ fun IssueCard(issue: CertIssue) {
 }
 
 // ============================================================================
+// Cipher Analysis Card
+// ============================================================================
+
+@Composable
+fun CipherAnalysisCard(analysis: CipherAnalysis) {
+    var expanded by remember { mutableStateOf(false) }
+
+    val strengthColor = when (analysis.strength) {
+        CipherStrength.STRONG -> GreenOk
+        CipherStrength.ACCEPTABLE -> OrangeWarning
+        CipherStrength.WEAK -> RedCritical
+    }
+    val strengthBgColor = when (analysis.strength) {
+        CipherStrength.STRONG -> GreenOkLight
+        CipherStrength.ACCEPTABLE -> OrangeWarningLight
+        CipherStrength.WEAK -> RedCriticalLight
+    }
+    val strengthLabel = when (analysis.strength) {
+        CipherStrength.STRONG -> "FORT"
+        CipherStrength.ACCEPTABLE -> "ACCEPTABLE"
+        CipherStrength.WEAK -> "FAIBLE"
+    }
+
+    OutlinedCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .clickable { expanded = !expanded }
+                .padding(16.dp)
+        ) {
+            // Header
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Lock,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Cipher Suite",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = analysis.fullName,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        fontSize = 11.sp,
+                    )
+                }
+
+                // Strength chip
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = strengthBgColor
+                ) {
+                    Text(
+                        text = strengthLabel,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        color = strengthColor,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Icon(
+                    imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                    contentDescription = if (expanded) "Réduire" else "Développer",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            // Feature chips (always visible)
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                if (analysis.isTls13) {
+                    CipherChip("TLS 1.3", GreenOk, GreenOkLight)
+                }
+                if (analysis.hasForwardSecrecy) {
+                    CipherChip("Forward Secrecy", GreenOk, GreenOkLight)
+                } else if (!analysis.isTls13) {
+                    CipherChip("Pas de FS", RedCritical, RedCriticalLight)
+                }
+                if (analysis.isAead) {
+                    CipherChip("AEAD", GreenOk, GreenOkLight)
+                }
+            }
+
+            // Expanded details
+            if (expanded) {
+                Spacer(modifier = Modifier.height(12.dp))
+                HorizontalDivider()
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Cipher components
+                Text(
+                    text = "Composants",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                InfoRow("Échange de clés", analysis.keyExchange, mono = true)
+                InfoRow("Chiffrement", analysis.encryption, mono = true)
+                InfoRow("MAC / Hash", analysis.mac, mono = true)
+
+                // Compatibility
+                if (analysis.compatibility.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "Compatibilité",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    analysis.compatibility.forEach { compat ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.Top,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (compat.supported) Icons.Filled.CheckCircle
+                                    else Icons.Filled.Cancel,
+                                contentDescription = null,
+                                tint = if (compat.supported) GreenOk else RedCritical,
+                                modifier = Modifier
+                                    .size(16.dp)
+                                    .padding(top = 2.dp)
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = compat.platform,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                                Text(
+                                    text = compat.detail,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    lineHeight = 16.sp,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CipherChip(label: String, textColor: Color, bgColor: Color) {
+    Surface(
+        shape = RoundedCornerShape(6.dp),
+        color = bgColor,
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+            color = textColor,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+        )
+    }
+}
+
+// ============================================================================
 // Helpers
 // ============================================================================
 
