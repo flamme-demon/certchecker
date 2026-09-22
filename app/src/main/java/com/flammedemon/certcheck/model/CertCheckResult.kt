@@ -19,6 +19,12 @@ data class CertCheckResult(
     val hostnameMatches: Boolean = false,
     val issues: List<CertIssue> = emptyList(),
     val error: String? = null,
+    /** Chaîne de causes complète de l'échec de confiance (CertPathValidatorException + causes). */
+    val trustFailureReason: String? = null,
+    /** Contexte du terminal ayant produit la validation (pour corréler racine / image). */
+    val deviceApiLevel: Int? = null,
+    val deviceAndroidVersion: String? = null,
+    val deviceSecurityPatch: String? = null,
 ) {
     val overallStatus: CheckStatus
         get() = when {
@@ -92,6 +98,7 @@ enum class IssueType {
     NO_SANS,
     CHAIN_TOO_LONG,
     ANDROID_SPECIFIC_TRUST_ISSUE,
+    SNI_DEPENDENT,
     CIPHER_WEAK,
     CIPHER_NO_FORWARD_SECRECY,
 }

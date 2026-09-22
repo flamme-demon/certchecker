@@ -1,23 +1,27 @@
 package com.flammedemon.certcheck.network
 
+import android.os.Build
 import com.flammedemon.certcheck.model.*
+import java.net.HttpURLConnection
+import java.net.InetAddress
 import java.net.InetSocketAddress
+import java.net.Socket
+import java.net.URL
+import java.security.KeyStore
 import java.security.MessageDigest
-import java.security.cert.CertPathValidator
 import java.security.cert.CertificateFactory
-import java.security.cert.PKIXParameters
-import java.security.cert.TrustAnchor
 import java.security.cert.X509Certificate
 import java.security.interfaces.ECPublicKey
 import java.security.interfaces.RSAPublicKey
+import java.util.Calendar
 import java.util.Date
-import javax.net.ssl.HttpsURLConnection
 import javax.net.ssl.SNIHostName
 import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLParameters
 import javax.net.ssl.SSLSocket
 import javax.net.ssl.TrustManagerFactory
 import javax.net.ssl.X509TrustManager
+import javax.security.auth.x500.X500Principal
 
 /**
  * Vérifie les certificats SSL/TLS du point de vue d'Android.
@@ -91,6 +95,7 @@ object SSLChecker {
         var chainValid = false
         var trustedByAndroid = false
         var hostnameMatches = false
+        var trustFailureReason: String? = null
 
         // --- Étape 1 : Connexion SSL brute (on capture tout, même si invalide) ---
         val sslContext = SSLContext.getInstance("TLS")
@@ -133,11 +138,12 @@ object SSLChecker {
         }
 
         // --- Étape 2 : Vérification de confiance via le trust store Android ---
-        trustedByAndroid = checkAndroidTrust(serverCerts, hostname)
+        val trust = checkAndroidTrust(serverCerts, cipherSuite)
+        trustedByAndroid = trust.trusted
         if (!trustedByAndroid) {
+            trustFailureReason = trust.reason
             // Diagnostic plus poussé
-            val rootCause = diagnoseAndroidTrustFailure(serverCerts, hostname)
-            issues.add(rootCause)
+            issues.add(diagnoseAndroidTrustFailure(serverCerts, trust.reason))
         }
 
         // --- Étape 3 : Vérification du hostname ---
@@ -153,6 +159,9 @@ object SSLChecker {
                 )
             )
         }
+
+        // --- Étape 3 bis : dépendance au SNI ---
+        detectSniDependency(hostname, port, serverCerts[0])?.let { issues.add(it) }
 
         // --- Étape 4 : Vérification de la chaîne ---
         chainValid = verifyChain(serverCerts)
@@ -191,6 +200,10 @@ object SSLChecker {
             trustedByAndroid = trustedByAndroid,
             hostnameMatches = hostnameMatches,
             issues = issues.sortedByDescending { it.severity.ordinal },
+            trustFailureReason = trustFailureReason,
+            deviceApiLevel = Build.VERSION.SDK_INT,
+            deviceAndroidVersion = Build.VERSION.RELEASE,
+            deviceSecurityPatch = Build.VERSION.SECURITY_PATCH,
         )
     }
 
@@ -198,95 +211,359 @@ object SSLChecker {
     // Vérification de confiance Android
     // ========================================================================
 
+    /** Résultat d'une vérification de confiance, avec le détail de l'échec éventuel. */
+    data class TrustCheckOutcome(
+        val trusted: Boolean,
+        val reason: String? = null,
+    )
+
     /**
-     * Vérifie si le certificat est approuvé par le trust store système d'Android.
+     * Vérifie si la chaîne est approuvée par le trust store système d'Android.
      * C'est LE test clé : un échec ici = l'app Android refusera la connexion.
+     *
+     * L'exception est conservée et déroulée : c'est elle qui contient la cause
+     * réelle (CertPathValidatorException <- "Trust anchor for certification
+     * path not found", expiration, etc.).
      */
-    private fun checkAndroidTrust(certs: Array<X509Certificate>, hostname: String): Boolean {
+    private fun checkAndroidTrust(
+        certs: Array<X509Certificate>,
+        cipherSuite: String?,
+    ): TrustCheckOutcome {
+        if (certs.isEmpty()) {
+            return TrustCheckOutcome(trusted = false, reason = "Aucun certificat à valider")
+        }
         return try {
             val tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
-            tmf.init(null as java.security.KeyStore?) // null = trust store système Android
-            val tm = tmf.trustManagers.first() as X509TrustManager
-            tm.checkServerTrusted(certs, "RSA")
-
-            // Vérification hostname en plus
-            val hv = HttpsURLConnection.getDefaultHostnameVerifier()
-            val sslContext = SSLContext.getInstance("TLS")
-            sslContext.init(null, null, null)
-            val sf = sslContext.socketFactory
-            val tempSocket = sf.createSocket() as SSLSocket
-
-            true
+            tmf.init(null as KeyStore?) // null = trust store système Android
+            val tm = tmf.trustManagers.filterIsInstance<X509TrustManager>().first()
+            tm.checkServerTrusted(certs, authTypeOf(cipherSuite, certs[0]))
+            TrustCheckOutcome(trusted = true)
         } catch (e: Exception) {
-            false
+            TrustCheckOutcome(trusted = false, reason = describeCauseChain(e))
         }
     }
 
     /**
-     * Diagnostique pourquoi Android ne fait pas confiance au certificat.
-     * Retourne un CertIssue spécifique au problème.
+     * authType = algorithme d'authentification négocié, déduit du cipher suite
+     * réellement négocié (TLS_ECDHE_RSA_WITH_... -> "ECDHE_RSA"). Pour TLS 1.3,
+     * le nom du cipher ne le porte pas : on retombe sur la clé du leaf.
+     * Jamais "UNKNOWN" : un TrustManager strict le refuserait, et cet échec
+     * masquerait la vraie cause derrière un problème d'authType.
+     */
+    private fun authTypeOf(cipherSuite: String?, leaf: X509Certificate): String {
+        if (cipherSuite != null && cipherSuite.contains("_WITH_")) {
+            val kx = cipherSuite.substringAfter("TLS_").substringBefore("_WITH_")
+            if (kx.isNotEmpty()) return kx
+        }
+        return when (leaf.publicKey.algorithm) {
+            "EC" -> "ECDHE_ECDSA"
+            else -> "RSA"
+        }
+    }
+
+    /**
+     * Déroule toute la chaîne de causes. C'est là que se trouve le détail utile :
+     * CertificateException <- CertPathValidatorException <- "Trust anchor for
+     * certification path not found".
+     */
+    private fun describeCauseChain(t: Throwable): String {
+        val parts = mutableListOf<String>()
+        val seen = mutableSetOf<Throwable>()
+        var cur: Throwable? = t
+        while (cur != null && seen.add(cur)) {
+            parts += "${cur.javaClass.simpleName}: ${cur.message ?: "(sans message)"}"
+            cur = cur.cause
+        }
+        return parts.joinToString("\n  ← ")
+    }
+
+    // ========================================================================
+    // Ancres de confiance du terminal (mémoïsées : le chargement est coûteux)
+    // ========================================================================
+
+    private val anchorCerts: List<X509Certificate> by lazy {
+        val tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
+        tmf.init(null as KeyStore?)
+        tmf.trustManagers.filterIsInstance<X509TrustManager>()
+            .firstOrNull()
+            ?.acceptedIssuers
+            ?.toList()
+            ?: emptyList()
+    }
+
+    private val anchorSubjects: Set<X500Principal> by lazy {
+        anchorCerts.map { it.subjectX500Principal }.toSet()
+    }
+
+    /**
+     * Vrai si [candidate] a bien été émis par l'ancre [anchor]. Compare la clé
+     * (vérification de signature), pas seulement le DN : un certificat
+     * cross-signé porte le DN de la racine sans en être la clé.
+     */
+    private fun signedByAnchor(candidate: X509Certificate, anchor: X509Certificate): Boolean =
+        runCatching { candidate.verify(anchor.publicKey); true }.getOrDefault(false)
+
+    /**
+     * Diagnostique pourquoi Android ne fait pas confiance à la chaîne servie.
+     *
+     * Le point de bascule n'est pas « le dernier certificat est-il auto-signé »
+     * (ne pas servir la racine est la configuration recommandée), mais :
+     * l'émetteur du dernier certificat servi est-il une ancre du trust store ?
      */
     private fun diagnoseAndroidTrustFailure(
         certs: Array<X509Certificate>,
-        hostname: String
+        reason: String?,
     ): CertIssue {
-        // Vérifier si c'est un problème de certificat auto-signé
-        if (certs.size == 1 && certs[0].subjectX500Principal == certs[0].issuerX500Principal) {
+        val top = certs.last()
+        val topIsSelfSigned = top.subjectX500Principal == top.issuerX500Principal
+
+        // --- Cas A : certificat auto-signé isolé ---
+        if (certs.size == 1 && topIsSelfSigned) {
             return CertIssue(
                 type = IssueType.SELF_SIGNED,
                 severity = IssueSeverity.CRITICAL,
                 title = "Certificat auto-signé",
                 description = "Le serveur présente un certificat auto-signé. " +
                         "Android le rejettera car il n'est signé par aucune CA de confiance. " +
-                        "Les navigateurs peuvent afficher un avertissement mais permettre de continuer."
+                        "Les navigateurs peuvent afficher un avertissement mais permettre " +
+                        "de continuer.\n\n$reason"
             )
         }
 
-        // Vérifier si la chaîne est incomplète (cas très fréquent !)
-        val lastCert = certs.last()
-        if (lastCert.subjectX500Principal != lastCert.issuerX500Principal) {
-            // Le dernier cert n'est pas un root → chaîne incomplète
-            return CertIssue(
-                type = IssueType.INCOMPLETE_CHAIN,
-                severity = IssueSeverity.CRITICAL,
-                title = "Chaîne de certificats incomplète",
-                description = "Le serveur ne fournit pas tous les certificats intermédiaires. " +
-                        "Les navigateurs peuvent compléter la chaîne via AIA fetching ou leur cache, " +
-                        "mais Android ne le fait PAS. L'intermédiaire manquant est signé par : " +
-                        "'${lastCert.issuerX500Principal.name}'. " +
-                        "→ Le serveur doit inclure tous les intermédiaires dans sa configuration TLS."
-            )
+        // --- Cas B : le serveur sert la racine ---
+        if (topIsSelfSigned) {
+            val anchor = anchorCerts.firstOrNull { it.subjectX500Principal == top.subjectX500Principal }
+            return when {
+                anchor == null -> unknownRootIssue(top.subjectX500Principal, top, reason)
+                signedByAnchor(top, anchor) -> CertIssue(
+                    type = IssueType.ANDROID_SPECIFIC_TRUST_ISSUE,
+                    severity = IssueSeverity.CRITICAL,
+                    title = "Racine connue, validation pourtant en échec",
+                    description = "La racine « ${dn(top.subjectX500Principal)} » est dans le " +
+                            "trust store Android, avec la même clé. La cause est ailleurs : " +
+                            "expiration, contrainte de nom, algorithme de signature refusé, " +
+                            "ou chaînon intermédiaire incorrect.\n\n$reason"
+                )
+                else -> CertIssue(
+                    type = IssueType.UNTRUSTED_ROOT,
+                    severity = IssueSeverity.CRITICAL,
+                    title = "Racine homonyme d'une ancre Android",
+                    description = "Un certificat du trust store porte le même nom " +
+                            "« ${dn(top.subjectX500Principal)} » mais une clé différente " +
+                            "(cross-signature ou homonymie). Ce n'est pas cette racine-là " +
+                            "qu'Android connaît : elle restera refusée.\n\n$reason"
+                )
+            }
         }
 
-        // Vérifier si le root n'est pas dans le trust store Android
-        val tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
-        tmf.init(null as java.security.KeyStore?)
-        val tm = tmf.trustManagers.first() as X509TrustManager
-        val androidRoots = tm.acceptedIssuers.map { it.subjectX500Principal.name }.toSet()
-
-        val rootCert = certs.last()
-        val rootSubject = rootCert.subjectX500Principal.name
-        if (rootSubject !in androidRoots) {
-            return CertIssue(
-                type = IssueType.UNTRUSTED_ROOT,
-                severity = IssueSeverity.CRITICAL,
-                title = "CA racine non reconnue par Android",
-                description = "La CA racine '$rootSubject' n'est pas dans le trust store Android. " +
-                        "Elle peut être reconnue par les navigateurs qui ont leur propre trust store. " +
-                        "Cela arrive souvent avec de nouvelles CA ou des CA régionales."
-            )
+        // --- Cas C : le serveur ne sert pas la racine (configuration recommandée) ---
+        // Le test n'est pas « le dernier cert est auto-signé » mais « son émetteur
+        // est-il une ancre Android ? ».
+        val neededAnchor = top.issuerX500Principal
+        val anchor = anchorCerts.firstOrNull { it.subjectX500Principal == neededAnchor }
+        if (anchor != null) {
+            return if (signedByAnchor(top, anchor)) {
+                CertIssue(
+                    type = IssueType.ANDROID_SPECIFIC_TRUST_ISSUE,
+                    severity = IssueSeverity.CRITICAL,
+                    title = "Ancre présente, validation en échec",
+                    description = "La racine « ${dn(neededAnchor)} » est bien dans le trust " +
+                            "store Android et a bien émis le dernier certificat servi. La chaîne " +
+                            "servie est complète. Chercher du côté des dates de validité, des " +
+                            "contraintes de base ou de l'usage de clé.\n\n$reason"
+                )
+            } else {
+                CertIssue(
+                    type = IssueType.UNTRUSTED_ROOT,
+                    severity = IssueSeverity.CRITICAL,
+                    title = "Ancre homonyme, clé différente",
+                    description = "Une ancre du trust store s'appelle « ${dn(neededAnchor)} » " +
+                            "mais n'a pas émis le dernier certificat servi (clé différente). " +
+                            "Android ne remontera pas jusqu'à cette ancre.\n\n$reason"
+                )
+            }
         }
 
-        // Fallback générique
+        // L'émetteur du dernier certificat n'est pas une ancre : deux causes possibles.
+        // L'AIA (caIssuers) permet de trancher — sinon, message à double hypothèse.
+        val fetched = fetchIssuerViaAia(top)
+        return when {
+            // Le chaînon manquant existe mais n'est pas servi : c'est un intermédiaire.
+            fetched != null && fetched.subjectX500Principal != fetched.issuerX500Principal ->
+                incompleteChainIssue(missing = fetched, top = top, reason = reason)
+            // Le chaînon manquant est auto-signé : c'est la racine, inconnue d'Android.
+            fetched != null ->
+                unknownRootIssue(fetched.subjectX500Principal, rootCert = fetched, reason = reason)
+            // AIA inaccessible : on ne peut pas trancher localement.
+            else ->
+                ambiguousIssuerIssue(top, leafOnly = certs.size == 1, reason = reason)
+        }
+    }
+
+    /**
+     * Il manque un chaînon dans la chaîne servie : le fullchain est tronqué.
+     * Contrairement aux navigateurs, Android ne fait ni résolution AIA ni cache.
+     */
+    private fun incompleteChainIssue(
+        missing: X509Certificate,
+        top: X509Certificate,
+        reason: String?,
+    ): CertIssue {
+        val rootAlsoMissing = missing.issuerX500Principal !in anchorSubjects
+        val description = buildString {
+            append("Il manque un certificat dans la chaîne servie :\n")
+            append("« ${dn(missing.subjectX500Principal)} »\n")
+            append("(n° ${missing.serialNumber.toString(16)}, valide du ${missing.notBefore} ")
+            append("au ${missing.notAfter})\n\n")
+            append("C'est l'émetteur du certificat « ${dn(top.subjectX500Principal)} » servi en ")
+            append("dernier. Le serveur ne sert que la partie basse de la chaîne : le fullchain ")
+            append("doit comporter cet intermédiaire.\n")
+            if (rootAlsoMissing) {
+                append("\nAttention : sa racine « ${dn(missing.issuerX500Principal)} » est elle ")
+                append("aussi absente du magasin. Après ajout de l'intermédiaire, il restera à ")
+                append("traiter la racine (cross-signature).")
+            } else {
+                append("\nUne fois l'intermédiaire servi, la chaîne aboutira à une ancre déjà ")
+                append("présente : le problème sera corrigé.")
+            }
+            if (reason != null) append("\n\n$reason")
+        }
         return CertIssue(
-            type = IssueType.ANDROID_SPECIFIC_TRUST_ISSUE,
+            type = IssueType.INCOMPLETE_CHAIN,
             severity = IssueSeverity.CRITICAL,
-            title = "Non approuvé par Android",
-            description = "Le certificat n'est pas approuvé par le trust store Android. " +
-                    "La cause exacte n'a pas pu être déterminée. " +
-                    "Vérifiez la configuration TLS du serveur."
+            title = "Chaîne de certificats incomplète",
+            description = description
         )
     }
+
+    /**
+     * Ni ancre connue, ni chaînon résolvable via AIA : intermédiaire manquant ou
+     * racine inconnue, impossible à trancher localement. Les deux hypothèses sont
+     * données avec leur correctif — affirmer l'une ou l'autre serait un faux positif.
+     */
+    private fun ambiguousIssuerIssue(
+        top: X509Certificate,
+        leafOnly: Boolean,
+        reason: String?,
+    ): CertIssue {
+        val issuerDn = dn(top.issuerX500Principal)
+        val description = buildString {
+            append("Le dernier certificat servi est émis par « $issuerDn », qui n'est ni une ")
+            append("ancre Android, ni résolvable via l'AIA (caIssuers inaccessible). Deux causes ")
+            append("possibles :\n\n")
+            append("1. Il manque un intermédiaire émis par « $issuerDn » dans le fullchain servi.")
+            if (leafOnly) {
+                append(" Le serveur ne sert que le certificat serveur : c'est l'hypothèse la ")
+                append("plus probable. Compléter le fullchain côté serveur.")
+            }
+            append("\n2. « $issuerDn » est une racine absente du magasin (racine récente ou CA ")
+            append("privée). Il faut alors demander une chaîne cross-signée par une racine plus ")
+            append("ancienne.\n\n")
+            append("À noter : ne pas servir la racine est la configuration recommandée ; ce ")
+            append("n'est donc pas l'absence de racine en fin de chaîne qui pose problème ici.")
+            if (reason != null) append("\n\n$reason")
+        }
+        return CertIssue(
+            type = if (leafOnly) IssueType.INCOMPLETE_CHAIN else IssueType.UNTRUSTED_ROOT,
+            severity = IssueSeverity.CRITICAL,
+            title = "Émetteur du dernier certificat inconnu d'Android",
+            description = description
+        )
+    }
+
+    /**
+     * Racine absente du magasin. Corrèle l'âge de la racine avec l'image du
+     * terminal : une racine n'arrive dans le magasin qu'avec une image construite
+     * après son intégration au bundle de référence (Mozilla/ccadb), et le magasin
+     * n'est devenu mettable à jour (Google Play system updates) qu'à partir
+     * d'Android 14.
+     */
+    private fun unknownRootIssue(
+        rootDn: X500Principal,
+        rootCert: X509Certificate?,
+        reason: String?,
+    ): CertIssue {
+        val sdk = Build.VERSION.SDK_INT
+        val release = Build.VERSION.RELEASE
+        val patch = Build.VERSION.SECURITY_PATCH // fraîcheur réelle de l'image
+        val imageYear = securityPatchYear(patch) ?: androidReleaseYear(sdk)
+        val storeIsUpdatable = sdk >= 34 // Android 14 : magasin mis à jour via Google Play
+        val rootYear = rootCert?.notBefore?.let {
+            Calendar.getInstance().apply { time = it }.get(Calendar.YEAR)
+        }
+
+        val verdict = buildString {
+            append("Ancre de confiance absente du trust store système :\n« ${dn(rootDn)} »\n\n")
+            append("Terminal : Android $release (API $sdk")
+            if (patch != null) append(", patch système $patch")
+            append(").\n")
+
+            if (rootYear != null) {
+                // Corrélation en indice, pas en fait : la date qui compte est
+                // l'intégration au bundle de référence, inconnue du certificat.
+                append("Racine émise en $rootYear")
+                if (imageYear != null) {
+                    if (rootYear >= imageYear) {
+                        append(", au mieux contemporaine de l'image du terminal (~$imageYear). ")
+                        append("Elle n'a probablement jamais figuré dans ce magasin : une racine ")
+                        append("n'y arrive qu'avec une image construite après son intégration au ")
+                        append("bundle de référence (Mozilla/ccadb), qui suit souvent sa création ")
+                        append("de un à deux ans.")
+                    } else {
+                        append(", antérieure à l'image (~$imageYear). Ça ne garantit pas sa ")
+                        append("présence : son intégration au bundle de référence (Mozilla/ccadb) ")
+                        append("peut être postérieure à la construction de l'image. Son absence ")
+                        append("du magasin, elle, est constatée.")
+                    }
+                }
+                append("\n\n")
+            }
+
+            if (storeIsUpdatable) {
+                append("Android 14+ : le magasin est mis à jour via Google Play system updates. ")
+                append("Vérifier Paramètres → Sécurité → Mise à jour du système Google Play. ")
+                append("Si le terminal est à jour et que l'AC est récente, la racine n'est pas ")
+                append("encore distribuée.\n\n")
+            } else {
+                append("Android 13 et antérieur : le magasin est figé dans l'image système ")
+                append("(/system/etc/security/cacerts), en lecture seule. Aucune mise à jour ")
+                append("possible sans changement de version d'OS.\n\n")
+            }
+
+            append("Correctif côté serveur : demander à l'autorité une chaîne cross-signée par ")
+            append("une racine plus ancienne déjà présente dans les magasins, et servir ce ")
+            append("chaînon à la place de la racine dans le fullchain. Le certificat serveur ")
+            append("n'a pas à être réémis.")
+
+            if (reason != null) append("\n\n$reason")
+        }
+
+        return CertIssue(
+            type = IssueType.UNTRUSTED_ROOT,
+            severity = IssueSeverity.CRITICAL,
+            title = "CA racine absente du magasin Android",
+            description = verdict
+        )
+    }
+
+    /** Année d'une date de patch sécurité Android ("2023-05-05"). */
+    private fun securityPatchYear(patch: String?): Int? = patch?.take(4)?.toIntOrNull()
+
+    /** Année de publication approximative de chaque niveau d'API (repli). */
+    private fun androidReleaseYear(sdk: Int): Int? = when (sdk) {
+        26, 27 -> 2017   // 8.0 / 8.1
+        28 -> 2018       // 9
+        29 -> 2019       // 10
+        30 -> 2020       // 11
+        31 -> 2021       // 12
+        32, 33 -> 2022   // 12L / 13
+        34 -> 2023       // 14
+        35 -> 2024       // 15
+        36 -> 2025       // 16
+        else -> null
+    }
+
+    private fun dn(p: X500Principal): String = p.getName(X500Principal.RFC1779)
 
     // ========================================================================
     // Analyse individuelle des certificats
@@ -475,7 +752,6 @@ object SSLChecker {
     // ========================================================================
 
     private fun verifyHostname(hostname: String, cert: X509Certificate): Boolean {
-        val hv = HttpsURLConnection.getDefaultHostnameVerifier()
         // Créer une session factice n'est pas trivial, on vérifie manuellement
         val sans = extractSANs(cert)
         if (sans.isNotEmpty()) {
@@ -805,5 +1081,167 @@ object SSLChecker {
         override fun checkClientTrusted(chain: Array<X509Certificate>?, authType: String?) {}
         override fun checkServerTrusted(chain: Array<X509Certificate>?, authType: String?) {}
         override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
+    }
+
+    // ========================================================================
+    // Détection d'une dépendance au SNI
+    // ========================================================================
+
+    /**
+     * Rejoue la connexion SANS SNI. Si le certificat présenté diffère, le serveur
+     * héberge plusieurs vhosts et sert un certificat par défaut — souvent
+     * auto-signé — aux clients qui n'envoient pas le SNI. Certaines piles HTTP
+     * anciennes embarquées dans des apps sont dans ce cas.
+     */
+    private fun detectSniDependency(
+        hostname: String,
+        port: Int,
+        leafWithSni: X509Certificate,
+    ): CertIssue? {
+        val leafWithoutSni = runCatching {
+            val ctx = SSLContext.getInstance("TLS")
+            ctx.init(null, arrayOf(CapturingTrustManager()), null)
+            (ctx.socketFactory.createSocket() as SSLSocket).use { s ->
+                // Connexion sur IP + serverNames explicitement vide : un
+                // SSLParameters neuf peut laisser le SNI implicite (peer hostname)
+                // actif selon l'implémentation, ce qui fausserait le test.
+                s.sslParameters = SSLParameters().apply {
+                    serverNames = emptyList()
+                    protocols = s.supportedProtocols
+                }
+                s.connect(InetSocketAddress(InetAddress.getByName(hostname), port), CONNECT_TIMEOUT_MS)
+                s.startHandshake()
+                s.session.peerCertificates.filterIsInstance<X509Certificate>().firstOrNull()
+            }
+        }.getOrNull() ?: return null
+
+        if (leafWithoutSni.encoded.contentEquals(leafWithSni.encoded)) return null
+
+        return CertIssue(
+            type = IssueType.SNI_DEPENDENT,
+            severity = IssueSeverity.WARNING,
+            title = "Le certificat dépend du SNI",
+            description = "Sans SNI, le serveur présente « " +
+                    "${dn(leafWithoutSni.subjectX500Principal)} » au lieu de « " +
+                    "${dn(leafWithSni.subjectX500Principal)} » (empreintes différentes). " +
+                    "Un client qui n'envoie pas l'extension SNI reçoit le certificat du " +
+                    "vhost par défaut et échouera avec la même exception. À vérifier si " +
+                    "l'application fautive utilise une pile HTTP ancienne."
+        )
+    }
+
+    // ========================================================================
+    // Résolution de l'émetteur via l'AIA (caIssuers, RFC 5280 §4.2.2.1)
+    // ========================================================================
+
+    private const val AIA_EXTENSION_OID = "1.3.6.1.5.5.7.1.1"
+    private val CA_ISSUERS_ACCESS_METHOD = byteArrayOf(0x2B, 0x06, 0x01, 0x05, 0x05, 0x07, 0x30, 0x02) // 1.3.6.1.5.5.7.48.2
+
+    /**
+     * Tente de récupérer le certificat émetteur de [cert] via son extension AIA.
+     * C'est ce qui permet de distinguer « il manque un intermédiaire » (le
+     * chaînon existe mais n'est pas servi) de « racine inconnue d'Android ».
+     * Retourne null si l'AIA est absent ou inaccessible — le diagnostic
+     * retombe alors sur un message à double hypothèse.
+     */
+    private fun fetchIssuerViaAia(cert: X509Certificate): X509Certificate? = runCatching {
+        val ext = cert.getExtensionValue(AIA_EXTENSION_OID)
+        val url = ext?.let { parseAiaCaIssuersUrl(it) }
+        val der = url?.let { httpGetBytes(it) }
+        der?.let {
+            CertificateFactory.getInstance("X.509").generateCertificate(it.inputStream()) as X509Certificate
+        }
+    }.getOrNull()
+
+    /** Extrait l'URL caIssuers d'une extension AuthorityInfoAccess (DER). */
+    private fun parseAiaCaIssuersUrl(extValue: ByteArray): String? {
+        // Valeur d'extension = OCTET STRING enveloppant AuthorityInfoAccessSyntax,
+        // soit SEQUENCE SIZE (1..MAX) OF AccessDescription.
+        if (extValue.isEmpty() || extValue[0] != 0x04.toByte()) return null
+        val (len, content) = readDerLength(extValue, 1) ?: return null
+        val end = content + len
+        if (end > extValue.size || extValue[content] != 0x30.toByte()) return null
+        val (aadLen, aadStart) = readDerLength(extValue, content + 1) ?: return null
+        val aadEnd = minOf(aadStart + aadLen, end)
+        var idx = aadStart
+        while (idx < aadEnd) {
+            // AccessDescription ::= SEQUENCE { accessMethod OID, accessLocation GeneralName }
+            val tag = extValue[idx]
+            val (seqLen, seqStart) = readDerLength(extValue, idx + 1) ?: return null
+            val seqEnd = seqStart + seqLen
+            if (tag != 0x30.toByte() || seqEnd > aadEnd) return null
+            // accessMethod : OID
+            if (extValue[seqStart] != 0x06.toByte()) { idx = seqEnd; continue }
+            val (oidLen, oidStart) = readDerLength(extValue, seqStart + 1) ?: return null
+            val oid = extValue.copyOfRange(oidStart, oidStart + oidLen)
+            val gnStart = oidStart + oidLen
+            // accessLocation : GeneralName — [6] IA5String pour uniformResourceIdentifier
+            if (gnStart + 1 >= seqEnd) { idx = seqEnd; continue }
+            val gnTag = extValue[gnStart]
+            val (gnLen, gnContent) = readDerLength(extValue, gnStart + 1) ?: return null
+            if (oid.contentEquals(CA_ISSUERS_ACCESS_METHOD) && gnTag == 0x86.toByte()) {
+                return String(extValue, gnContent, gnLen, Charsets.US_ASCII)
+            }
+            idx = seqEnd
+        }
+        return null
+    }
+
+    /** Lit une longueur DER (courte ou longue). Renvoie (longueur, index du contenu). */
+    private fun readDerLength(buf: ByteArray, start: Int): Pair<Int, Int>? {
+        if (start >= buf.size) return null
+        val first = buf[start].toInt() and 0xFF
+        if (first < 0x80) return first to (start + 1)
+        val count = first and 0x7F
+        if (count == 0 || count > 4 || start + 1 + count > buf.size) return null
+        var len = 0
+        for (i in 1..count) len = (len shl 8) or (buf[start + i].toInt() and 0xFF)
+        return len to (start + 1 + count)
+    }
+
+    /**
+     * GET HTTP minimal, retourne le corps de la réponse.
+     * En clair, on passe par un Socket brut : les URL caIssuers sont presque
+     * toujours en http://, et NetworkSecurityPolicy bloque HttpURLConnection
+     * en clair sur targetSdk 28+.
+     */
+    private fun httpGetBytes(urlString: String, timeoutMs: Int = 5_000): ByteArray? = runCatching {
+        if (urlString.startsWith("https://")) {
+            val conn = URL(urlString).openConnection()
+            conn.connectTimeout = timeoutMs
+            conn.readTimeout = timeoutMs
+            if (conn is HttpURLConnection && conn.responseCode != 200) return@runCatching null
+            conn.getInputStream().use { it.readBytes() }
+        } else {
+            val url = URL(urlString)
+            Socket().use { s ->
+                s.connect(InetSocketAddress(url.host, if (url.port == -1) 80 else url.port), timeoutMs)
+                s.soTimeout = timeoutMs
+                val path = url.file.ifEmpty { "/" }
+                s.getOutputStream().apply {
+                    write(("GET $path HTTP/1.0\r\nHost: ${url.host}\r\nConnection: close\r\n\r\n")
+                        .toByteArray(Charsets.US_ASCII))
+                    flush()
+                }
+                parseHttpBody(s.getInputStream().readBytes())
+            }
+        }
+    }.getOrNull()
+
+    private fun parseHttpBody(response: ByteArray): ByteArray? {
+        val sep = "\r\n\r\n".toByteArray(Charsets.US_ASCII)
+        val headerEnd = indexOf(response, sep) ?: return null
+        val head = String(response, 0, headerEnd, Charsets.US_ASCII)
+        val status = head.lineSequence().firstOrNull() ?: return null
+        if (!status.contains(" 200")) return null
+        return response.copyOfRange(headerEnd + sep.size, response.size)
+    }
+
+    private fun indexOf(haystack: ByteArray, needle: ByteArray): Int? {
+        outer@ for (i in 0..haystack.size - needle.size) {
+            for (j in needle.indices) if (haystack[i + j] != needle[j]) continue@outer
+            return i
+        }
+        return null
     }
 }
