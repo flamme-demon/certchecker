@@ -6,15 +6,15 @@ plugins {
 }
 
 android {
-    namespace = "de.guenthers.certcheck"
+    namespace = "com.flammedemon.certcheck"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "de.guenthers.certcheck"
+        applicationId = "com.flammedemon.certcheck"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 5
+        versionName = "1.2.1"
     }
 
     buildTypes {
@@ -70,6 +70,9 @@ dependencies {
 
     // WorkManager
     implementation("androidx.work:work-runtime-ktx:2.10.0")
+
+    // Coil (image loading for favicons)
+    implementation("io.coil-kt:coil-compose:2.7.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

@@ -1,4 +1,4 @@
-package de.guenthers.certcheck.model
+package com.flammedemon.certcheck.model
 
 import java.security.cert.X509Certificate
 import java.util.Date
@@ -12,12 +12,19 @@ data class CertCheckResult(
     val timestamp: Date = Date(),
     val tlsVersion: String? = null,
     val cipherSuite: String? = null,
+    val cipherAnalysis: CipherAnalysis? = null,
     val certificates: List<CertificateInfo> = emptyList(),
     val chainValid: Boolean = false,
     val trustedByAndroid: Boolean = false,
     val hostnameMatches: Boolean = false,
     val issues: List<CertIssue> = emptyList(),
     val error: String? = null,
+    /** Chaîne de causes complète de l'échec de confiance (CertPathValidatorException + causes). */
+    val trustFailureReason: String? = null,
+    /** Contexte du terminal ayant produit la validation (pour corréler racine / image). */
+    val deviceApiLevel: Int? = null,
+    val deviceAndroidVersion: String? = null,
+    val deviceSecurityPatch: String? = null,
 ) {
     val overallStatus: CheckStatus
         get() = when {
@@ -91,6 +98,9 @@ enum class IssueType {
     NO_SANS,
     CHAIN_TOO_LONG,
     ANDROID_SPECIFIC_TRUST_ISSUE,
+    SNI_DEPENDENT,
+    CIPHER_WEAK,
+    CIPHER_NO_FORWARD_SECRECY,
 }
 
 enum class IssueSeverity {
@@ -105,3 +115,30 @@ enum class CheckStatus {
     CRITICAL,
     ERROR,
 }
+
+/**
+ * Analyse détaillée du cipher suite négocié.
+ */
+data class CipherAnalysis(
+    val fullName: String,
+    val keyExchange: String,
+    val encryption: String,
+    val mac: String,
+    val strength: CipherStrength,
+    val hasForwardSecrecy: Boolean,
+    val isTls13: Boolean,
+    val isAead: Boolean,
+    val compatibility: List<CipherCompatibility>,
+)
+
+enum class CipherStrength {
+    STRONG,
+    ACCEPTABLE,
+    WEAK,
+}
+
+data class CipherCompatibility(
+    val platform: String,
+    val supported: Boolean,
+    val detail: String,
+)

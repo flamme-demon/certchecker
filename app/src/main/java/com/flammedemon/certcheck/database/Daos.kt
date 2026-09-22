@@ -1,4 +1,4 @@
-package de.guenthers.certcheck.database
+package com.flammedemon.certcheck.database
 
 import androidx.room.*
 import kotlinx.coroutines.flow.Flow
@@ -25,6 +25,9 @@ interface FavoriteDao {
 
     @Query("UPDATE favorites SET lastCheckedAt = :timestamp WHERE id = :id")
     suspend fun updateLastChecked(id: Long, timestamp: Long)
+
+    @Query("UPDATE favorites SET notificationsEnabled = :enabled WHERE id = :id")
+    suspend fun updateNotificationsEnabled(id: Long, enabled: Boolean)
 }
 
 @Dao
@@ -46,4 +49,18 @@ interface CheckHistoryDao {
 
     @Query("SELECT * FROM check_history WHERE favoriteId = :favoriteId ORDER BY checkedAt DESC LIMIT 2")
     suspend fun getLastTwoChecks(favoriteId: Long): List<CheckHistoryEntity>
+
+    @Query("""
+        SELECT ch.* FROM check_history ch
+        INNER JOIN (
+            SELECT favoriteId, MAX(checkedAt) as maxChecked
+            FROM check_history GROUP BY favoriteId
+        ) latest
+        ON ch.favoriteId = latest.favoriteId AND ch.checkedAt = latest.maxChecked
+        ORDER BY ch.daysUntilExpiry ASC
+    """)
+    fun getLatestCheckPerFavorite(): Flow<List<CheckHistoryEntity>>
+
+    @Query("UPDATE check_history SET favoriteId = :favoriteId WHERE hostname = :hostname AND port = :port AND favoriteId IS NULL")
+    suspend fun linkChecksToFavorite(favoriteId: Long, hostname: String, port: Int)
 }

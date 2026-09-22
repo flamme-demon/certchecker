@@ -1,7 +1,7 @@
-package de.guenthers.certcheck.database
+package com.flammedemon.certcheck.database
 
-import de.guenthers.certcheck.model.CertCheckResult
-import de.guenthers.certcheck.network.SSLChecker
+import com.flammedemon.certcheck.model.CertCheckResult
+import com.flammedemon.certcheck.network.SSLChecker
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 
@@ -11,16 +11,37 @@ class CertCheckRepository(private val database: CertCheckDatabase) {
 
     fun getAllFavorites(): Flow<List<FavoriteEntity>> = favoriteDao.getAllFavorites()
 
-    fun getAllRecentHistory(limit: Int = 50): Flow<List<CheckHistoryEntity>> = 
+    fun getAllRecentHistory(limit: Int = 50): Flow<List<CheckHistoryEntity>> =
         historyDao.getAllRecentHistory(limit)
+
+    fun getLatestCheckPerFavorite(): Flow<List<CheckHistoryEntity>> =
+        historyDao.getLatestCheckPerFavorite()
+
+    suspend fun saveCheck(result: CertCheckResult, favoriteId: Long? = null) {
+        val entity = result.toHistoryEntity(favoriteId)
+        historyDao.insertHistory(entity)
+    }
 
     suspend fun addFavorite(hostname: String, port: Int = 443): Long {
         val favorite = FavoriteEntity(hostname = hostname, port = port)
-        return favoriteDao.insertFavorite(favorite)
+        val favId = favoriteDao.insertFavorite(favorite)
+        // Link existing checks to this new favorite
+        historyDao.linkChecksToFavorite(favId, hostname, port)
+        // Update lastCheckedAt from the most recent linked check
+        val recentChecks = historyDao.getRecentHistory(favId, 1)
+        if (recentChecks.isNotEmpty()) {
+            favoriteDao.updateLastChecked(favId, recentChecks.first().checkedAt)
+        }
+        return favId
     }
 
     suspend fun removeFavorite(id: Long) {
         favoriteDao.deleteFavoriteById(id)
+    }
+
+    suspend fun toggleFavoriteNotifications(id: Long) {
+        val favorite = favoriteDao.getFavoriteById(id) ?: return
+        favoriteDao.updateNotificationsEnabled(id, !favorite.notificationsEnabled)
     }
 
     suspend fun isFavorite(hostname: String, port: Int): Boolean {
@@ -60,10 +81,6 @@ class CertCheckRepository(private val database: CertCheckDatabase) {
             changes.add("Certificate fingerprint changed")
         }
 
-        if (previous.daysUntilExpiry != current.daysUntilExpiry) {
-            changes.add("Days until expiry changed: ${previous.daysUntilExpiry} -> ${current.daysUntilExpiry}")
-        }
-
         return if (changes.isNotEmpty()) {
             ChangeDetection(
                 favoriteId = favoriteId,
@@ -75,7 +92,7 @@ class CertCheckRepository(private val database: CertCheckDatabase) {
         } else null
     }
 
-    private fun CertCheckResult.toHistoryEntity(favoriteId: Long): CheckHistoryEntity {
+    private fun CertCheckResult.toHistoryEntity(favoriteId: Long?): CheckHistoryEntity {
         val leafCert = certificates.firstOrNull()
         return CheckHistoryEntity(
             favoriteId = favoriteId,
